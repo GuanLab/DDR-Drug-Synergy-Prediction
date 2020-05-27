@@ -14,18 +14,18 @@ To run this repository smoothly, three types of feature data (response, feature 
 
 We also included two extra types features, chemical structure and gene network features. The raw data used to construct network features is avaliable from [MouseNet](http://fntm.princeton.edu). 
 
-## data preprocess
+## Data Preprocess
 
 QC includes the general analysis for the quality of the above three types of data.
 
-### split training and testing data
+## Split Training and Testing Data
 
 ```
 python test_split.py
 ```
 this will create test and training set splits from the Drug Synergy dataset.
 
-## Model training and create SHAP analysis Plots
+## Train Models and Create SHAP Analysis Plots
 
 Two models were constructed parallelly to evaluate the drug synergy prediction under different circunstances
 
