@@ -1,22 +1,24 @@
 # Merck DDR Drug Synergy Prediction
-## Dependency
-```
-Python 3
-LightGBM
-```
 
 This repository contains the code of the final model for DDR drug Synergy Prediction Project Wave 1. 
+
+## Dependency
+
+Python 3
+[LightGBM 2.3.2](https://lightgbm.readthedocs.io/en/latest/index.html)
+
 ## Data Resource
 
-To run this mondel smoothly, three types of feature data (response, feature and geneset) should be placed under the /data directory.  
+To run this repository smoothly, three types of feature data (response, feature and geneset) should be placed under the /data directory.  
 
-we also included two extra types features, chemical structure and gene network features. the raw data to be used to construct network features is avaliable from [MouseNet](http://fntm.princeton.edu) 
+We also included two extra types features, chemical structure and gene network features. The raw data used to construct network features is avaliable from [MouseNet](http://fntm.princeton.edu). 
 
 ## data preprocess
 
 QC includes the general analysis for the quality of the above three types of data.
 
 ### split training and testing data
+
 ```
 python test_split.py
 ```
@@ -28,15 +30,19 @@ Merck_test_by_cell_line : cross indication models
 Merck_test_by_batch: cross batch models
 
 both to run both model, first we run
+
 ```
 python data_process.py
 ```
+
 This will construct feature matrix for all the monotherapy features
 
 then we run:
+
 ```
 python model_training.py
 ```
+
 This program will carry out four tasks: 
 * Train and validate the the final version of the Drug Synergy prediction model.
 * Carry our SHAP analysis on the whole test set
