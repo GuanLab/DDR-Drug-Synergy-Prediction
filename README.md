@@ -38,9 +38,9 @@ To run both model, first we run
 python data_process.py
 ```
 
-This will construct feature matrix for all the monotherapy features
+This will construct feature matrix for all the monotherapy features.
 
-then we run:
+Then we run
 
 ```
 python model_training.py
@@ -50,7 +50,7 @@ This program will carry out four tasks:
 * Train and validate the the final version of the Drug Synergy prediction model.
 * Carry our SHAP analysis on the whole test set
 * Carry out SHAP analysis on each of the mode-of-action syngergy pairs
-* Print dependency plot of different types of molecular markders of the gene of interest.
+* Print dependency plot of different types of molecular markers of the gene of interest.
 
 
 
