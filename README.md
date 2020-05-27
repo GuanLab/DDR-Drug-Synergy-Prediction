@@ -10,7 +10,7 @@ This repository contains the code of the final model for DDR drug Synergy Predic
 
 ## Data Resource
 
-To run this repository smoothly, three types of feature data (response, feature and geneset) should be placed under the /data directory.  
+To run this repository smoothly, three types of feature data (response, feature and geneset) should be placed under the `/data` directory.  
 
 We also included two extra types features, chemical structure and gene network features. The raw data used to construct network features is avaliable from [MouseNet](http://fntm.princeton.edu). 
 
