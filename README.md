@@ -4,7 +4,8 @@ This repository contains the code of the final model for DDR drug Synergy Predic
 
 ## Dependency
 
-Python 3
+[Python 3.0](https://www.python.org/download/releases/3.0/)
+
 [LightGBM 2.3.2](https://lightgbm.readthedocs.io/en/latest/index.html)
 
 ## Data Resource
