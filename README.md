@@ -27,10 +27,12 @@ this will create test and training set splits from the Drug Synergy dataset.
 
 ## Model training and create SHAP analysis Plots
 
-Merck_test_by_cell_line : cross indication models
-Merck_test_by_batch: cross batch models
+Two models were constructed parallelly to evaluate the drug synergy prediction under different circunstances
 
-both to run both model, first we run
+* Merck_test_by_cell_line : cross indication models
+* Merck_test_by_batch: cross batch models
+
+To run both model, first we run
 
 ```
 python data_process.py
