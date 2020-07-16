@@ -45,6 +45,10 @@ def sum_SHAP(target):
                 df['feature_type'].append('Molecular_lof_pat')
             elif col.endswith('_ddr'):
                 df['feature_type'].append('Molecular_ddr')
+            elif col == 'Synergy_batch':
+                df['feature_type'].append('Synergy_batch')
+            elif col.endswith('_drug'):
+                df['feature_type'].append('Drug_category')
             else:
                 df['feature_type'].append('Unknown')
     df = pd.DataFrame.from_dict(df)
