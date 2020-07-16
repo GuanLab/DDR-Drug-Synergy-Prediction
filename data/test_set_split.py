@@ -48,8 +48,8 @@ def test_train_split_by_cell_line(synergy):
         filepath = '../test_by_cell_line/fold_'+str(i)
         i+=1
         os.makedirs(filepath, exist_ok = True)
-        train_f = [cell_lines[i] for i in train]
-        test_f = [cell_lines[i] for i in test]
+        train_f = [cell_lines[j] for j in train]
+        test_f = [cell_lines[j] for j in test]
         train_df = synergy[synergy['.identifier_sample_name'].isin(train_f)]
         test_df = synergy[synergy['.identifier_sample_name'].isin(test_f)]
         train_df.to_csv(filepath+'/Train.tsv', sep = '\t', index = False)
@@ -74,9 +74,32 @@ def test_train_split_by_batch(synergy):
         train_df.to_csv(filepath+'/Train.tsv', sep = '\t', index = False)
         test_df.to_csv(filepath+'/Test.tsv', sep = '\t', index = False)
 
+def test_train_split_by_indication(synergy):
+    """ 
+    test set *: independent indication (tissue)
+    *split by indication(tissue)
+    train on one tissue and test on the remaining 11 tissues
+    """
+    cell_lines = list(set(list(synergy['.metadata_cancer_type'])))
+    os.makedirs('../test_by_indication/', exist_ok = True)
+    #tissue specific train/validation
+    for train in cell_lines:
+        train_f = [train]
+        test_f = cell_lines.copy()
+        test_f.remove(train)
+        filepath = '../test_by_indication/fold_'+train
+        os.makedirs(filepath, exist_ok = True)
+        #print(train_f)
+        #print(test_f)
+        train_df = synergy[synergy['.metadata_cancer_type'].isin(train_f)]
+        test_df = synergy[synergy['.metadata_cancer_type'].isin(test_f)]
+        train_df.to_csv(filepath+'/Train.tsv', sep = '\t', index = False)
+        test_df.to_csv(filepath+'/Test.tsv', sep = '\t', index = False)
+
 def split_moa(f):
-    i in range(5):
-        path = f+"fold_"+str(i)
+    import glob
+    fpaths = glob.glob(f+'*')
+    for path in fpaths:
         os.makedirs(path+'/moa', exist_ok = True)
         df = pd.read_csv(path+'/Test.tsv', sep = '\t')
         moa_pairs = ['_'.join(sorted([r['.metadata_moa_1'],r['.metadata_moa_2']])) for _,r in df.iterrows()]
@@ -90,9 +113,11 @@ def split_moa(f):
 
 test_train_split_by_cell_line(synergy)
 test_train_split_by_batch(synergy)
+test_train_split_by_indication(synergy)
 
 split_moa('../test_by_cell_line/')
 split_moa('../test_by_batch/')
+split_moa('../test_by_indication/')
 
 
 
