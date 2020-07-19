@@ -16,10 +16,10 @@ We also included two extra types features, chemical structure and gene network f
 
 ## Data Preprocess
 
-* 1. `./QC` includes the general analysis for the quality of the above three types of data.
+* 1. `./data/QC` includes the general analysis for the quality of the above three types of data.
 * 2. Quantile normalization on gene expression levels. Run 
 ```
-cd ./QC
+cd .data/QC
 python quantile_expression_level.py
 ```
 This will generate quantile normalized feature sets.
@@ -27,6 +27,7 @@ This will generate quantile normalized feature sets.
 ## Split Training and Testing Data
 
 ```
+cd ./data
 python test_split.py
 ```
 this will create test and training set splits from the Drug Synergy dataset.
