@@ -65,11 +65,11 @@ This will construct feature matrix for all the monotherapy features.
 
 ### Train Synergy Prediction Models
 
-Our LightGBM incorperate the following four types of features
-** Monotherapy response **
-** Molecular Markers **
-** Drug Chemical Structure **
-** Gene Network **
+Our LightGBM incorperate the following four types of features:
+* Monotherapy experiment efficacy score (AOC)
+* Molecular Markers
+* Drug Chemical Structure
+* Gene Network
 
 To start model training ana validation, we run:
 
