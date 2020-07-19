@@ -38,7 +38,7 @@ Since we designed different cross-validation settings, two sets of models were c
 * Merck_test_by_cell_line : cross indication models
 * Merck_test_by_batch: cross batch models
 
-to start training the above two sets of models, first we need to `cd` to the corresponding directoriy:
+to start training the above two sets of models, first we need to `cd` to the corresponding directories:
 ```
 cd Merck_test_by_cell_line
 ``` 
