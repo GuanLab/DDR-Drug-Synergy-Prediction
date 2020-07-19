@@ -18,8 +18,7 @@ We also included two extra types features, chemical structure and gene network f
 
 * 1. `./QC` includes the general analysis for the quality of the above three types of data.
 * 2. Quantile normalization on gene expression levels. Run 
-```
-cd ./QC
+```cd ./QC
 python quantile_expression_level.py
 ```
 This will generate quantile normalized feature sets.
@@ -39,20 +38,17 @@ Since we designed different cross-validation settings, two sets of models were c
 * Merck_test_by_batch: cross batch models
 
 to start training the above two sets of models, first we need to `cd` to the corresponding directoriy:
-```
-cd Merck_test_by_cell_line
+```cd Merck_test_by_cell_line
 ``` 
 or
-```
-cd Merck_test_by_batch
+```cd Merck_test_by_batch
 ```
 
 ### Data preparation
 
 To run both model, first we run
 
-```
-python data_process.py
+```python data_process.py
 ```
 This will generate three files or foldera:
 
@@ -71,10 +67,9 @@ Our LightGBM incorperate the following four types of features:
 * Drug Chemical Structure
 * Gene Network
 
-To start model training ana validation, we run:
+To start model training and validation, we run:
 
-```
-python model_training.py
+```python model_training.py
 ```
 
 This program will carry out four tasks: 
@@ -87,8 +82,7 @@ This program will carry out four tasks:
 
 This part is crucial for analysing potential molecualr biomarkers. 
 
-``` 
-python statistical_analysis.py
+``` python statistical_analysis.py
 ``` 
 This program will carry out analysis in the following aspects:
 
