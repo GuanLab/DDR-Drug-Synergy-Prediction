@@ -12,7 +12,7 @@ def pd_to_XY(target, data, if_train = False):
     f = open('../data/moa_to_genes.json','r').read()
     moa2gene = json.loads(f)
     
-    gene_features = pd.read_csv('../data/merck_confidential_features_20200221.tsv', sep ='\t', index_col = 0)
+    gene_features = pd.read_csv('../data/quantiled_merck_confidential_features_20200221.tsv', sep ='\t', index_col = 0)
     cols = gene_features.columns.to_list()
     embed = {}
     for i in range(13):
