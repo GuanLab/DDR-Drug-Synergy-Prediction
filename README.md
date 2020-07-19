@@ -92,7 +92,7 @@ python statistical_analysis.py
 ``` 
 This program will carry out analysis in the following aspects:
 
-** 1. Analyse SHAP results by feature category.
-** 2. Analyse ddr gene's feature importance by it's molecular features (cnv, snv, lof and exp)
-** 3. Analyse tissue-specific ddr gene features.
-** 4. Analyse the interaction between priorized biomarkers (ddr genes/gene clusters/ddr signature)
+* 1. Analyse SHAP results by feature category.
+* 2. Analyse ddr gene's feature importance by it's molecular features (cnv, snv, lof and exp)
+* 3. Analyse tissue-specific ddr gene features.
+* 4. Analyse the interaction between priorized biomarkers (ddr genes/gene clusters/ddr signature)
