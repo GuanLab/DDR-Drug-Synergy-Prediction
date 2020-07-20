@@ -26,13 +26,19 @@ class SHAP_Analysis:
                 if None, carry our analysis on overall dataset.
                 None or a string
 
-        Yield:
-            category_df: Summarized SHAP contributions by category.
-                a Pandas dataframe
-                witten to <pred_target>+"_SHAP.tsv"
-            molecular_df: Summarized SHAP contributions of ddr genes' molecular features.
-                a Pandas dataframe
-                also written to <pred_target>+"_molecular_SHAP.tsv"
+        Yields:
+            self.pred_target: pred_target
+            
+            self.moa_pair: moa_pair
+
+            self.fpaths: input path of SHAP analysis results from model_training.py
+                a list of string
+            self.cat_outpath: output path of categoricalized SHAP analysis results.
+                a string
+            self.mol_outpath: output path of molecular marker's SHAP analysis results.
+                a string
+            self.fig_outpath: output path of interaction heatmap of top features.
+                a string
         """
         self.pred_target = pred_target
         self.moa_pair = moa_pair
@@ -54,7 +60,9 @@ class SHAP_Analysis:
         * 2. Calculate interactions between feature and tissue ('cancer_type' and 'cancer_subtype')
                                                     
         Yields:
-            self.category_df: a data frame with four columns ('feature', 'SHAP_val', 'rep', 'feature_type')
+            self.category_df: Summarized SHAP contributions by category.
+                a Pandas dataframe
+                witten to <pred_target>+"_SHAP.tsv"
         """
 
         def feature_to_category(f):
@@ -121,6 +129,7 @@ class SHAP_Analysis:
         for path in self.fpaths:
             data = pd.read_csv(path, header = 0)
             rep = str(path.split('_')[-1].split('.')[0]) #replcate index
+            
             # calculate tissue correlation
             s_tissue_type = np.array([i for i in data['Monotherapy1_.metadata_cancer_type']])
             s_tissue_subtype = np.array([i for i in data['Monotherapy1_.metadata_cancer_subtype']])
@@ -150,6 +159,7 @@ class SHAP_Analysis:
         Yields:
             self.molecular_df: SHAP analysis of ddr genes' molecular markers
                 a Pandas dataframe
+                written to <pred_target>+"_molecular_SHAP.tsv"
         """
         print('Start tissue-specific analysis of all featurese for '+self.pred_target+' score prediction models ...')
 
