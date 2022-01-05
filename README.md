@@ -1,4 +1,4 @@
-# Merck DDR Drug Synergy Prediction
+# DDR Drug Synergy Prediction
 
 This repository contains the code for DDR drug Synergy Prediction.
 
