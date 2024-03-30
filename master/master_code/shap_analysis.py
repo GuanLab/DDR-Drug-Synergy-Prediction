@@ -12,7 +12,7 @@ import os
 from build_feature_dataset import *
 from utils import *
 
-def SHAP_analysis(test_path,exclude_synergy_batch, exclude_cell_line, exclude_cancer_type, target, features,  model_path, surrogate_gene, surrogate_geneset, surrogate_chem):
+def SHAP_analysis(test_path,exclude_synergy_batch, exclude_cell_line, exclude_cancer_type, target, cv_split, features, mol_type, model_path, surrogate_gene, surrogate_geneset, surrogate_synleth, surrogate_chem):
     """ Carry out SHAP analysis of trained regressor on target dataset
 
     Parameters:
@@ -35,7 +35,7 @@ def SHAP_analysis(test_path,exclude_synergy_batch, exclude_cell_line, exclude_ca
 
     Test = pd.read_csv(test_path, sep = '\t')
     #Test = Test[Test['.response_'+target].notna()]
-    f_name, Test_X, Test_Y = build_feature_dataset(Test, exclude_synergy_batch, exclude_cell_line, exclude_cancer_type, target, features, surrogate_gene, surrogate_geneset, surrogate_chem, if_train = False)
+    f_name, Test_X, Test_Y = build_feature_dataset(Test, exclude_synergy_batch, exclude_cell_line, exclude_cancer_type, target, cv_split, features, mol_type, surrogate_gene, surrogate_geneset, surrogate_synleth, surrogate_chem, if_train = False)
     
     # get feature values
     shap_values = shap.TreeExplainer(regressor).shap_values(Test_X)

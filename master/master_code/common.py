@@ -16,7 +16,7 @@ from utils import *
 from shap_analysis import *
 from models import *
 
-def train(train_path, exclude_synergy_batch, exclude_cell_line, exclude_cancer_type, target, features, model_path, surrogate_gene, surrogate_geneset, surrogate_chem):
+def train(train_path, exclude_synergy_batch, exclude_cell_line, exclude_cancer_type, target, features, mol_type, model_path, surrogate_gene, surrogate_geneset, surrogate_synleth, surrogate_chem):
     """ Train LightGBM synergy prediction model
     
     Params
@@ -35,26 +35,13 @@ def train(train_path, exclude_synergy_batch, exclude_cell_line, exclude_cancer_t
     """
     print("Loading Training dataset ...")
     Train = pd.read_csv(train_path, sep = '\t')
+    cv_split = 'experiment_'+train_path.split('/')[2]
         
     # Exclude datasets with missing target score
     Train = Train[Train['.response_'+target].notna()]
 
-    # split validation set by half cell lines/tissue
-    #random.seed(0)
-    #if 'test_by_cell_line' in train_path:
-    #    cell_lines = sorted(set(Train['.identifier_sample_name']))
-    #    cell_lines_val = random.sample(cell_lines,int(0.5*len(cell_lines)))
-    #    Val = Train.loc[Train['.identifier_sample_name'].isin(cell_lines_val),:]
-    #    Train = Train.loc[~Train['.identifier_sample_name'].isin(cell_lines_val),:]
-    #elif 'test_by_cell_line' in train_path:
-    #    tissues = sorted(set(Train['.metadata_cancer_type']))
-    #    tissues_val = random.sample(tissues,int(0.5*len(tissues)))
-    #    Val = Train.loc[Train['.metadata_cancer_type'].isin(tissues_val),:]
-    #    Train = Train.loc[~Train['.metadata_cancer_type'].isin(tissues_val),:]
-        
     # Build Training feature set
-    f_name, Train_X,Train_Y = build_feature_dataset(Train, exclude_synergy_batch, exclude_cell_line, exclude_cancer_type, target, features, surrogate_gene, surrogate_geneset, surrogate_chem, if_train = True)
-    #f_name, Val_X, Val_Y = build_feature_dataset(Val, exclude_synergy_batch, exclude_cell_line, exclude_cancer_type, target, features, surrogate_gene, surrogate_geneset, surrogate_chem, if_train = True)    
+    f_name, Train_X,Train_Y = build_feature_dataset(Train, exclude_synergy_batch, exclude_cell_line, exclude_cancer_type, target, cv_split, features, mol_type, surrogate_gene, surrogate_geneset, surrogate_synleth, surrogate_chem, if_train = True)
     
     print('start training model ...')
     #regressor = train_LightGBM_model(Train_X, Train_Y,  Val_X, Val_Y, f_name)
@@ -69,7 +56,7 @@ def train(train_path, exclude_synergy_batch, exclude_cell_line, exclude_cancer_t
     
     return cor
 
-def predict(test_path, exclude_synergy_batch, exclude_cell_line, exclude_cancer_type, target, features, model_path, surrogate_gene, surrogate_geneset, surrogate_chem):
+def predict(test_path, exclude_synergy_batch, exclude_cell_line, exclude_cancer_type, target, features, mol_type, model_path, surrogate_gene, surrogate_geneset, surrogate_synleth, surrogate_chem):
     """ Perform trained models on test dataset
     
     Params
@@ -91,11 +78,12 @@ def predict(test_path, exclude_synergy_batch, exclude_cell_line, exclude_cancer_
     """
     print("Loading Test dataset ...")
     Test = pd.read_csv(test_path, sep = '\t')
+    cv_split = 'experiment_'+test_path.split('/')[2]
 
     # Exclude datasets with missing target score
     #Test = Test[Test['.response_'+target].notna()]
     if Test.shape[0] > 0:
-        f_name, Test_X, Test_Y = build_feature_dataset(Test, exclude_synergy_batch, exclude_cell_line, exclude_cancer_type, target, features, surrogate_gene, surrogate_geneset, surrogate_chem, if_train = False)
+        f_name, Test_X, Test_Y = build_feature_dataset(Test, exclude_synergy_batch, exclude_cell_line, exclude_cancer_type, target, cv_split, features, mol_type, surrogate_gene, surrogate_geneset, surrogate_synleth, surrogate_chem, if_train = False)
         print('Loading saved model ...')
         regressor = pickle.load(open(model_path, 'rb'))
         
@@ -105,7 +93,7 @@ def predict(test_path, exclude_synergy_batch, exclude_cell_line, exclude_cancer_
         # Save prediction and groud truth
         pred = np.array([Test_Y,pred_Y]).T
         
-        cor = ma.corrcoef(ma.masked_invalid(pred_Y), ma.masked_invalid(Test_Y))[0,1]
+        cor = ma.corrcoef(ma.masked_invalid(pred_Y), ma.masked_invalid(Test_Y))[0,1] # ignore nan
         print("Prediction-gold standard's correlation on test set:",cor)
     else:
         print("Empty Test Set!")
@@ -113,7 +101,7 @@ def predict(test_path, exclude_synergy_batch, exclude_cell_line, exclude_cancer_
         pred = np.nan
     return cor, pred
         
-def evaluate_SHAP_analysis(data_path, subset_type, exclude_synergy_batch, exclude_cell_line, exclude_cancer_type, target, features, surrogate_gene, surrogate_geneset, surrogate_chem):
+def evaluate_SHAP_analysis(data_path, subset_type, exclude_synergy_batch, exclude_cell_line, exclude_cancer_type, target, features, mol_type, surrogate_gene, surrogate_geneset, surrogate_synleth, surrogate_chem):
     """ carry out subset-specific SHAP analysis
     
     Params
@@ -139,6 +127,7 @@ def evaluate_SHAP_analysis(data_path, subset_type, exclude_synergy_batch, exclud
     from glob import glob
 
     all_path = sorted(list(glob(data_path+'/fold_*')))
+    cv_split = 'experiment_'+data_path.split('/')[2]
     
     for path in all_path:
         
@@ -160,7 +149,7 @@ def evaluate_SHAP_analysis(data_path, subset_type, exclude_synergy_batch, exclud
             
             subset_name = sub_path.split('/')[-1].split('.')[0]
 
-            if subset_type in ["Train", "Test"]:
+            if subset_type in ["Train", "Test"]:  
                 subset_outpath = './'+subset_type
 
             else:
@@ -183,20 +172,21 @@ def evaluate_SHAP_analysis(data_path, subset_type, exclude_synergy_batch, exclud
 
             results = open(subset_outpath+'/cor_'+target+'.txt', 'a')
             # prediction on test set
-            cor, pred = predict(sub_path, exclude_synergy_batch, exclude_cell_line, exclude_cancer_type, target, features, model_path, surrogate_gene, surrogate_geneset, surrogate_chem)
+            cor, pred = predict(sub_path, exclude_synergy_batch, exclude_cell_line, exclude_cancer_type, target, features, mol_type, model_path, surrogate_gene, surrogate_geneset, surrogate_synleth, surrogate_chem)
             results.write('%.4f\n'%(cor))
             results.close()
             print("base value:", np.mean(pred[:,1]))
 
             # SHAP analysis on the test set
-            shap_val, _, f_name = SHAP_analysis(sub_path,exclude_synergy_batch, exclude_cell_line, exclude_cancer_type, target, features,  model_path, surrogate_gene, surrogate_geneset, surrogate_chem)
+            shap_val, _, f_name = SHAP_analysis(sub_path, exclude_synergy_batch, exclude_cell_line, exclude_cancer_type, target, cv_split, features, mol_type, model_path, surrogate_gene, surrogate_geneset, surrogate_synleth, surrogate_chem)
 
-            # save original Test_X without target gene and network altherations:
+            # save original Test_X without target gene and network alterations:
             if ('network' in features) or ('target_gene' in features):
-                features = [i for i in features if (i not in ['network', 'target_gene'])]
-            
-            print(features)
-            f_name, Test_X, Test_Y = build_feature_dataset(Test, exclude_synergy_batch, exclude_cell_line, exclude_cancer_type, target, features, surrogate_gene, surrogate_geneset, surrogate_chem, if_train = False)
+                new_features = [i for i in features if (i not in ['network', 'target_gene'])]
+            else:
+                new_features = features
+            print(new_features)
+            f_name, Test_X, Test_Y = build_feature_dataset(Test, exclude_synergy_batch, exclude_cell_line, exclude_cancer_type, target, cv_split, new_features, mol_type, surrogate_gene, surrogate_geneset, surrogate_synleth, surrogate_chem, if_train = False)
 
             # Save SHAP values and feature values to np arrays
             shap_val = sparse.csr_matrix(shap_val)
@@ -207,7 +197,7 @@ def evaluate_SHAP_analysis(data_path, subset_type, exclude_synergy_batch, exclud
             np.savetxt(subset_outpath+'/pred_'+target+'_'+str(idx)+'.txt', pred[:,1])
             pickle.dump(f_name,open(subset_outpath+'/feature_names_'+target+'.pkl','wb'))
 
-def five_fold_cross_validation(data_path, exclude_synergy_batch, exclude_cell_line, exclude_cancer_type, target, features, surrogate_gene, surrogate_geneset, surrogate_chem):
+def k_fold_cross_validation(data_path, exclude_synergy_batch, exclude_cell_line, exclude_cancer_type, target, features, mol_type, surrogate_gene, surrogate_geneset, surrogate_synleth, surrogate_chem):
     """ Five fold cross validation of synergy prediction model
 
     Params
@@ -243,11 +233,11 @@ def five_fold_cross_validation(data_path, exclude_synergy_batch, exclude_cell_li
         # start model training 
         train_path = path+'/Train.tsv'
         model_path = target+'_'+str(idx)+'.model'
-        cor = train(train_path, exclude_synergy_batch, exclude_cell_line, exclude_cancer_type, target, features, model_path, surrogate_gene, surrogate_geneset, surrogate_chem)
+        cor = train(train_path, exclude_synergy_batch, exclude_cell_line, exclude_cancer_type, target, features, mol_type, model_path, surrogate_gene, surrogate_geneset, surrogate_synleth, surrogate_chem)
 
         # prediction on test set
         test_path = path+'/Test.tsv'
-        cor, pred = predict(test_path, exclude_synergy_batch, exclude_cell_line, exclude_cancer_type, target, features, model_path, surrogate_gene, surrogate_geneset, surrogate_chem)
+        cor, pred = predict(test_path, exclude_synergy_batch, exclude_cell_line, exclude_cancer_type, target, features, mol_type, model_path, surrogate_gene, surrogate_geneset, surrogate_synleth, surrogate_chem)
         #np.savetxt(target+'_pred_'+str(idx)+'.txt', pred)
         
         # include fold prediction into all prediction
@@ -256,6 +246,8 @@ def five_fold_cross_validation(data_path, exclude_synergy_batch, exclude_cell_li
         # write out test performance
         eva_df["fold"].append(idx)
         eva_df["Pearson's r"].append(cor)
+
+        np.savetxt(target+'_pred_'+str(idx)+'.txt', pred)
 
     eva_df = pd.DataFrame.from_dict(eva_df)
 
@@ -266,31 +258,34 @@ def five_fold_cross_validation(data_path, exclude_synergy_batch, exclude_cell_li
     
     return eva_df, eva_all
 
-def predict_on_held_out(data_path, exclude_synergy_batch, exclude_cell_line, exclude_cancer_type, target, features, surrogate_gene, surrogate_geneset, surrogate_chem):
-    """ After model training, evaluate on the the held-out set.
+def predict_on_hold_out(data_path, out_path, exclude_synergy_batch, exclude_cell_line, exclude_cancer_type, target, features, mol_type, surrogate_gene, surrogate_geneset, surrogate_synleth, surrogate_chem):
+    """ After model training, evaluate on the the hold-out set.
 
     Params:
     """
-    os.makedirs('hold_out', exist_ok = True)
+    from glob import glob
+    
     eva_df = {"fold":[],"Pearson's r":[]}
-    pred_all = [] 
-    for i in range(5):
+    pred_all = []
+    all_model_path = sorted(glob('./'+target+'*.model')) 
+    for model_path in all_model_path:
+        i = model_path.split('_')[-1].split('.')[0]
         model_path = target+'_'+str(i)+'.model'
-        # prediction on the held-out set
-        cor, pred = predict(data_path, exclude_synergy_batch, exclude_cell_line, exclude_cancer_type, target, features, model_path, surrogate_gene, surrogate_geneset, surrogate_chem)
+        # prediction on the hold-out set
+        cor, pred = predict(data_path, exclude_synergy_batch, exclude_cell_line, exclude_cancer_type, target, features, mol_type, model_path, surrogate_gene, surrogate_geneset, surrogate_synleth, surrogate_chem)
         pred_all.extend(pred.tolist())
         
         print(cor)
         eva_df["fold"].append(i)
         eva_df["Pearson's r"].append(cor)
-        np.savetxt('./hold_out/'+target+'_pred_'+str(i)+'.txt', pred)
+        np.savetxt(out_path+target+'_pred_'+str(i)+'.txt', pred)
     
     eva_df = pd.DataFrame.from_dict(eva_df)
-    eva_df.to_csv('./hold_out/'+'cor_'+target+'.csv')
+
+    # calculate overall prediction performance confidence interval
     pred_all =  np.array(pred_all)
     mb, lb, ub = boostrapping_confidence_interval(pred_all, 0.95)
     eva_all = "mean[95CI]: %.4f[%.4f, %.4f]" % (mb, lb, ub)
 
-    result = open("./hold_out/cv-95ci_"+target+".txt", 'w')
-    result.write(eva_all)
-    result.close()
+    return eva_df, eva_all
+    

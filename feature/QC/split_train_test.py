@@ -2,30 +2,42 @@
 #author: @rayezh
 import pandas as pd
 import json,os
-from sklearn.model_selection import train_test_split, KFold
+from sklearn.model_selection import train_test_split, KFold, StratifiedKFold
 
 def test_train_split_by_cell_line(synergy):
     """
     #test set 1: test within indications
     *split by cell lines(balanced by indications)
     """
-    cell_lines = sorted(list(set(list(synergy['.identifier_sample_name']))))
-    print(cell_lines)
-    print(len(cell_lines))
+    tmp = synergy[['.identifier_sample_name', '.metadata_cancer_type']].drop_duplicates().sort_values(by = '.identifier_sample_name').reset_index(drop = True)
+    #print(tmp)
+    cell_lines = list(tmp['.identifier_sample_name'])
+    cancer_types = list(tmp['.metadata_cancer_type'])
+    print(cell_lines, len(cell_lines))
+    print(cancer_types, len(cancer_types))
     os.makedirs('../../test_by_cell_line/', exist_ok = True)
-    kf = KFold(n_splits = 5, shuffle = True, random_state = 42)
+    # stratefied fold: each fold has the same proportion of cell lines from each indication
+    # kf = KFold(n_splits = 5, shuffle = True, random_state = 42)
+    skf = StratifiedKFold(n_splits=10, shuffle=True, random_state=0)
     i = 0
     #5-fold cross validation
-    for train, test in kf.split(cell_lines):
+    for train, test in skf.split(cell_lines, cancer_types):
         filepath = '../../test_by_cell_line/fold_'+str(i)
         i+=1
         os.makedirs(filepath, exist_ok = True)
         train_f = [cell_lines[j] for j in train]
         test_f = [cell_lines[j] for j in test]
+        #print(test_f, len(set([cancer_types[j] for j in test])), len(set([cancer_types[j] for j in train])))
         train_df = synergy[synergy['.identifier_sample_name'].isin(train_f)]
         test_df = synergy[synergy['.identifier_sample_name'].isin(test_f)]
         train_df.to_csv(filepath+'/Train.tsv', sep = '\t', index = False)
         test_df.to_csv(filepath+'/Test.tsv', sep = '\t', index = False)
+    
+    # put hold-out set ho1 in the validation set
+    fpath = '../../test_by_cell_line/hold_out_validation/'
+    os.makedirs(fpath, exist_ok = True)
+    val_data = pd.read_csv('../data/hold_out/ho1/synergy_responses_with_monotherapy.tsv', sep ='\t')
+    val_data.to_csv(fpath+'/Test.tsv', sep = '\t', index = False)
 
 def test_train_split_by_batch(synergy):
     """
@@ -55,7 +67,8 @@ def test_train_split_by_batch(synergy):
             i+=1
 
 def test_train_split_by_indication(synergy):
-    """ 
+    """
+    leave-one-out cross validation 
     test set *: independent cancer type
     *split by cancer type
     """
@@ -63,19 +76,29 @@ def test_train_split_by_indication(synergy):
     print(indications)
     print(len(indications))
     os.makedirs('../../test_by_indication/', exist_ok = True)
-    kf = KFold(n_splits = 5, shuffle = True, random_state = 42)
     i = 0
-    for train, test in kf.split(indications):
-        filepath = '../../test_by_indication/fold_'+str(i)
+    for test_f in indications:
+        train_f = indications.copy()
+        train_f.remove(test_f)
+        filepath = '../../test_by_indication/fold_'+test_f
         os.makedirs(filepath, exist_ok = True)
         i += 1
-        train_f = [indications[j] for j in train]
-        test_f = [indications[j] for j in test]
         print(test_f)
         train_df = synergy[synergy['.metadata_cancer_type'].isin(train_f)]
-        test_df = synergy[synergy['.metadata_cancer_type'].isin(test_f)]
+        test_df = synergy[synergy['.metadata_cancer_type'].isin([test_f])]
         train_df.to_csv(filepath+'/Train.tsv', sep = '\t', index = False)
         test_df.to_csv(filepath+'/Test.tsv', sep = '\t', index = False)
+    
+    # put hold-out set ho2 in the validation set
+    fpath = '../../test_by_indication/hold_out_validation/'
+    os.makedirs(fpath, exist_ok = True)
+    val_data = pd.read_csv('../data/hold_out/ho2/synergy_responses_with_monotherapy.tsv', sep ='\t')
+    indications = sorted(list(set(list(val_data['.metadata_cancer_type']))))
+    for test_i in indications:
+        test = val_data[val_data['.metadata_cancer_type'] == test_i]
+        test.to_csv(fpath+'/Test_'+test_i+'.tsv', sep = '\t', index = False)
+
+
 
 def test_train_split_by_moa_pair(synergy):
     """ 

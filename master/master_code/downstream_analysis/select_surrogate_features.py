@@ -4,25 +4,24 @@ import os
 
 """
 Select features for surrogate model 
-
-prerequisite:
-    ../features_molecular_target_gene_network/aoc[bliss]_*.tsv
-
 """
 
 def generate_surrogate_list(m_version):
     """
+    select genes/genesets for surrogate model
     params
     ------
     m_version: model version (geneset or gene)
     """
     # model version to select feature from
+    model_path = '../'
     if m_version == 'gene':
-        model_path = '../../features_molecular_target_gene_network/'
         feature_type = "Molecular_exp" # feature type to select from
     if m_version == 'geneset':
-        model_path = '../../features_geneset/'
         feature_type = "Geneset"
+    # select top features from each category
+    
+
 
     for score in ['aoc', 'bliss']:
         df = pd.read_csv(model_path+score+'_totalSHAP.tsv', sep = '\t')

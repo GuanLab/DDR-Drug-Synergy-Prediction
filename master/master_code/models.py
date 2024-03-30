@@ -34,6 +34,8 @@ def train_LightGBM_model(X,Y, feature_name):
             'verbose': 0,
             'n_estimators': 1000,
             'reg_alpha': 2.0,
+            #'feature_fraction':0.3,
+            #'bagging_fraction': 0.3
                    }
     # exclude categorical features that are not in feature set
     categorical_feature = ["Synergy_batch",

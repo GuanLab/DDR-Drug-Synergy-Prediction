@@ -18,10 +18,8 @@ import itertools
 df = pd.read_csv('../target_gene/all_drugs_summary.csv')
 # find all drugs
 all_drugs = df['drug_name']
-#all_drugs = sorted(set(df['.metadata_treatment_1'])|set(df['.metadata_treatment_2']))
-#all_drugs.remove('Monotherapy')
-# map drug to moa
-#drug2moa = {r['.metadata_treatment_'+j]:str(r['.metadata_moa_'+j]) for _,r in df.iterrows() for j in ['1', '2']}
+
+# find all drugs with mode of action
 drug2moa = {r['drug_name']:r['mode-of-action'] for _,r in df.iterrows()}
 
 # all ddr genes
@@ -35,13 +33,12 @@ comp2target = dict()
 df_LINCS = pd.read_csv('./LINCS/dataset_20000_20210415165646.csv')
 
 try:
-    comp2target = json.load(open('../target_gene/drug2gene.json', 'r'))
-except:
     print("Start new compound-target list ...")
     comp2target = dict()
     for d in all_drugs:
         comp2target[d] = list()
-
+except:
+    pass
 def uniprot2genesymbol(query):
     url = 'https://www.uniprot.org/uploadlists/'
     params = {
@@ -72,6 +69,7 @@ def target_from_moa(drug):
     for i in genes:
         r = re.compile(i+"[0-9]*$")
         new_genes = list(filter(r.match, all_ddr_genes))  # match genes in all_ddr_gene list
+        # for the following genes, the protein (target name) and the gene names are different
         if i == 'DNAPK':
             new_genes = ['PRKDC']
         if i == 'CHK1':
@@ -82,7 +80,7 @@ def target_from_moa(drug):
 
     return moa_symbol
 
-def target_from_chemble(drug):
+def target_from_chembl(drug):
     """
     """
     molecule = new_client.molecule
@@ -93,7 +91,7 @@ def target_from_chemble(drug):
         res = molecule.search(i)
         all_mols.extend(res)
     all_chembl_id = [i['molecule_chembl_id'] for i in all_mols]
-    activities = new_client.activity.filter(molecule_chembl_id__in=all_chembl_id).only(['target_chembl_id'])
+    activities = new_client.target.filter(molecule_chembl_id__in=all_chembl_id).only(['target_chembl_id'])
     target_ids = [i['target_chembl_id'] for i in activities]
     targets = new_client.target.filter(target_chembl_id__in=target_ids).only(['target_components'])
     uniprots |= {comp['accession'] for t in targets for comp in t['target_components']}
@@ -131,35 +129,45 @@ def target_from_dgi(drug):
     ddr_dgi_symbol = [i for i in dgi_symbol if i in all_ddr_genes]
     return ddr_dgi_symbol
 
-
+refs = []
 for d in all_drugs:
-    
+    print(d, drug2moa[d])
     # find targets from MoA
     moa_symbol = target_from_moa(d)
     comp2target[d].extend(moa_symbol)
-    print(moa_symbol)
-
+    ref = []
+    """
     # find targets from ChEMBL
-    ddr_symbol = target_from_chemble(d)
+    ddr_symbol = target_from_chembl(d)
     comp2target[d].extend(ddr_symbol)
-    
+    if len(ddr_symbol) > 0:
+        ref.append('CHEMBL')
+    """
     # find targets from LINCS
     ddr_lincs_symbol = target_from_lincs(d)
+    print('LINCS', ddr_lincs_symbol)
     comp2target[d].extend(ddr_lincs_symbol)
-    
+    if len(ddr_lincs_symbol) > 0:
+        ref.append('LINCS')
+
     # find targets from DGIdb
     ddr_dgi_symbol = target_from_dgi(d)
+    print('DGIdb', ddr_dgi_symbol)
     comp2target[d].extend(ddr_dgi_symbol)
+    if len(ddr_dgi_symbol) > 0:
+         ref.append('DGIdb')
     
     comp2target[d] = sorted(set(comp2target[d]))
     print(d,drug2moa[d],comp2target[d])
+    ref = ';'.join(ref)
+    refs.append(ref)
 
 
 out_df = {'drug_name':list(comp2target.keys()),
         'mode-of-action':[drug2moa[i] for i in comp2target.keys()],
-        'target_proteins':[','.join(i) for i in comp2target.values()]}
+        'target_proteins':[','.join(i) for i in comp2target.values()],
+        'references': refs}
 out_df = pd.DataFrame.from_dict(out_df)
-out_df['reference'] = 'CHEMBL'
 out_df.to_csv('../target_gene/all_drugs_summary.csv', index = False)
 
 json.dump(comp2target,open('../target_gene/drug2gene.json', 'w'))

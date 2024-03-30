@@ -16,7 +16,7 @@ import matplotlib.pyplot as plt
 import matplotlib.font_manager
 
 class Downstream_SHAP_Analysis:
-    def __init__(self, pred_target, moa_pair = None, subset = '', n_top = 20):
+    def __init__(self, pred_target, shap_path, n_top = 20):
         """ Downstream analysis from SHAP
         * 1. Summarize SHAP values of all features of machine learning models on specific mode-of-action dataset.
             This function will also generate a .tsv file for plotting figures in R.
@@ -28,10 +28,6 @@ class Downstream_SHAP_Analysis:
         Params:
             pred_target: prediction target ('aoc' or 'bliss')
                 a string
-
-            moa_pair: the mode-of-action(MOA) subset to analysis (e.g. 'ATMi_ATRi')
-                if None, carry our analysis on overall dataset.
-                None or a string
 
             n_top: number of top genes for interaction analysis
                 an integer
@@ -74,10 +70,11 @@ class Downstream_SHAP_Analysis:
                 a list of string
         """
         self.pred_target = pred_target
-        self.moa_pair = moa_pair
         self.n_top = n_top
-        self.subset = subset
-        self.outpath = '../'+subset+'/'+moa_pair+'/'
+        self.outpath = shap_path
+        self.test_data = shap_path.split('/')[1]
+        print('Test data of shap: '+self.test_data)
+
 
         # Check if SHAP analysis results are in the right place
         self.all_SHAPpath = glob(self.outpath+'SHAP_'+self.pred_target+'_*.npz')
@@ -89,7 +86,7 @@ class Downstream_SHAP_Analysis:
 
         self.fnames = pickle.load(open(self.outpath+'feature_names_'+self.pred_target+'.pkl', 'rb'))
 
-        # combine all shap from cv
+        # combine all shap from k-fold cv
         print('Loading SHAP ...')
         all_shap = []
         for f in sorted(self.all_SHAPpath):
@@ -128,74 +125,71 @@ class Downstream_SHAP_Analysis:
         # summed by category
         data_cat = self.Sum_category(self.all_shap, self.fnames)
         data_cat.to_csv(self.outpath+'cat_SHAP_'+self.pred_target+'.csv', index = False)
-        # chemical-sum of each fingerprints
+        # chemical-sum of each fingerprints (RDK, MACCS, Morgan, FP2, FP4, FP3)
         data_chem = self.Sum_each_chemical(self.all_shap, self.fnames)
         data_chem.to_csv(self.outpath+'chem_SHAP_'+self.pred_target+'.csv', index = False)
-        # molecular-sum of each type of molecular (4+2+1)
+        # molecular-sum of each type of molecular (exp, snv, cnv, lof, coh_pat, lof_pat, ddr)
         data_mol = self.Sum_each_molecular(self.all_shap, self.fnames)
         data_mol.to_csv(self.outpath+'mol_SHAP_'+self.pred_target+'.csv', index = False)
         # synthetic lethality
         data_syn = self.Sum_each_sythetic_lethality(self.all_shap, self.fnames)
         data_syn.to_csv(self.outpath+'syn_SHAP_'+self.pred_target+'.csv', index = False)
         
+        # locally dissect SHAP for each treatment type: moa-combination, ddr-backbone, tissue type
+        for subset_type in ['moa', 'ddr']:
+            sub_df_all = []
+            data_gene_all = []
+            data_cat_all = []
+            data_chem_all = []
+            data_mol_all = []
+            data_syn_all = []
+            for s, sub_shap, sub_features, sub_gs in self.generate_subset(subset_type):
+                sub_df, sub_fig = self.calculate_SHAP_summary(sub_shap, sub_features, sub_gs, self.fnames)
+                sub_df[subset_type] = s
+                # summed by gene
+                data_gene = self.Sum_all_mol_of_gene(sub_shap, self.fnames)
+                data_gene[subset_type] = s
+                #data_gene.to_csv(outpath+'gene_SHAP_'+self.pred_target+'.csv', index = False)
+                # summed by category
+                data_cat = self.Sum_category(sub_shap, self.fnames)
+                data_cat[subset_type] = s
+                #data_cat.to_csv(outpath+'cat_SHAP_'+self.pred_target+'.csv', index = False)
+                # chemical-sum of each fingerprints
+                data_chem = self.Sum_each_chemical(sub_shap, self.fnames)
+                data_chem[subset_type] = s
+                #data_chem.to_csv(outpath+'chem_SHAP_'+self.pred_target+'.csv', index = False)
+                # molecular-sum of each type of molecular (4+2+1)
+                data_mol = self.Sum_each_molecular(sub_shap, self.fnames)
+                data_mol[subset_type] = s
+                #data_mol.to_csv(outpath+'mol_SHAP_'+self.pred_target+'.csv', index = False)
+                # synthetic lethality
+                data_syn = self.Sum_each_sythetic_lethality(sub_shap, self.fnames)
+                data_syn[subset_type] = s
+                #data_syn.to_csv(outpath+'syn_SHAP_'+self.pred_target+'.csv', index = False)
 
-        # locally dissect SHAP for each cancer type and cancer subtype
-        sub_df_all = []
-        data_gene_all = []
-        data_cat_all = []
-        data_chem_all = []
-        data_mol_all = []
-        data_syn_all = []
-        for tissue, sub_shap, sub_features, sub_gs in self.generate_tissue_specific():
-            #outpath = self.outpath+tissue+'/'
-            #os.makedirs(outpath, exist_ok = True)
-            #SHAP_summary_path = outpath+'SHAP_summary_'+self.pred_target+'.csv'
-            #SHAP_summary_plot_path =  outpath+'SHAP_summary_scatter_'+self.pred_target+'.pdf'
-            sub_df, sub_fig = self.calculate_SHAP_summary(sub_shap, sub_features, sub_gs, self.fnames)
-            sub_df['tissue'] = tissue
-            # summed by gene
-            data_gene = self.Sum_all_mol_of_gene(sub_shap, self.fnames)
-            data_gene['tissue'] = tissue
-            #data_gene.to_csv(outpath+'gene_SHAP_'+self.pred_target+'.csv', index = False)
-            # summed by category
-            data_cat = self.Sum_category(sub_shap, self.fnames)
-            data_cat['tissue'] = tissue
-            #data_cat.to_csv(outpath+'cat_SHAP_'+self.pred_target+'.csv', index = False)
-            # chemical-sum of each fingerprints
-            data_chem = self.Sum_each_chemical(sub_shap, self.fnames)
-            data_chem['tissue'] = tissue
-            #data_chem.to_csv(outpath+'chem_SHAP_'+self.pred_target+'.csv', index = False)
-            # molecular-sum of each type of molecular (4+2+1)
-            data_mol = self.Sum_each_molecular(sub_shap, self.fnames)
-            data_mol['tissue'] = tissue
-            #data_mol.to_csv(outpath+'mol_SHAP_'+self.pred_target+'.csv', index = False)
-            # synthetic lethality
-            data_syn = self.Sum_each_sythetic_lethality(sub_shap, self.fnames)
-            data_syn['tissue'] = tissue
-            #data_syn.to_csv(outpath+'syn_SHAP_'+self.pred_target+'.csv', index = False)
-
-            sub_df_all.append(sub_df)
+                sub_df_all.append(sub_df)
             
-            data_gene_all.append(data_gene)
-            data_cat_all.append(data_cat)
-            data_chem_all.append(data_chem)
-            data_mol_all.append(data_mol)
-            data_syn_all.append(data_syn)
+                data_gene_all.append(data_gene)
+                data_cat_all.append(data_cat)
+                data_chem_all.append(data_chem)
+                data_mol_all.append(data_mol)
+                data_syn_all.append(data_syn)
             
-        sub_df_all = pd.concat(sub_df_all)
-        data_gene_all = pd.concat(data_gene_all)
-        data_cat_all = pd.concat(data_cat_all)
-        data_chem_all = pd.concat(data_chem_all)
-        data_mol_all = pd.concat(data_mol_all)
-        data_syn_all = pd.concat(data_syn_all)
+            sub_df_all = pd.concat(sub_df_all)
+            data_gene_all = pd.concat(data_gene_all)
+            data_cat_all = pd.concat(data_cat_all)
+            data_chem_all = pd.concat(data_chem_all)
+            data_mol_all = pd.concat(data_mol_all)
+            data_syn_all = pd.concat(data_syn_all)
         
-        sub_df_all.to_csv(self.outpath+'tissue_summary_SHAP_'+self.pred_target+'.csv', index = False)
-        data_gene_all.to_csv(self.outpath+'tissue_gene_SHAP_'+self.pred_target+'.csv', index = False)
-        data_cat_all.to_csv(self.outpath+'tissue_cat_SHAP_'+self.pred_target+'.csv', index = False)
-        data_chem_all.to_csv(self.outpath+'tissue_chem_SHAP_'+self.pred_target+'.csv', index = False)
-        data_mol_all.to_csv(self.outpath+'tissue_mol_SHAP_'+self.pred_target+'.csv', index = False)
-        data_syn_all.to_csv(self.outpath+'tissue_syn_SHAP_'+self.pred_target+'.csv', index = False)
-
+            sub_df_all.to_csv(self.outpath+subset_type+'_summary_SHAP_'+self.pred_target+'.csv', index = False)
+            data_gene_all.to_csv(self.outpath+subset_type+'_gene_SHAP_'+self.pred_target+'.csv', index = False)
+            data_cat_all.to_csv(self.outpath+subset_type+'_cat_SHAP_'+self.pred_target+'.csv', index = False)
+            data_chem_all.to_csv(self.outpath+subset_type+'_chem_SHAP_'+self.pred_target+'.csv', index = False)
+            data_mol_all.to_csv(self.outpath+subset_type+'_mol_SHAP_'+self.pred_target+'.csv', index = False)
+            data_syn_all.to_csv(self.outpath+subset_type+'_syn_SHAP_'+self.pred_target+'.csv', index = False)
+        
+        
         """
         self.Analyse_top_feature_interation_network()
         """
@@ -215,24 +209,22 @@ class Downstream_SHAP_Analysis:
 
         cat = 'Unknown'
 
-        if (f == 'Cell_line'):
+        if (f.startswith('Cell_line')):
             cat = 'Cell_line'
-        elif (f == 'Synergy_batch'):
+        elif (f.startswith('Synergy_batch')):
             cat = 'Synergy batch'
-        elif (f == 'Cancer_type'):
+        elif (f.startswith('Cancer_type')):
             cat = 'Cancer_type'
-        elif (f == 'Cancer_subtype'):
+        elif (f.startswith('Cancer_subtype')):
             cat = 'Cancer_subtype'
-        elif (f == "Concentration"):
+        elif (f.startswith("Concentration")):
             cat = 'Concentration of Static Compound'
         elif re.match(r'Treatment_[1|2]_Oncolead_[0-9]{3}', f) is not None:
             cat = 'Monotherapy drug efficacy (AOC)'
         elif re.match(r'Treatment_[1|2]_ave', f) is not None:
             cat = 'Monotherapy drug efficacy (AOC)'
-        elif re.match(r'Treatment_[1|2]_moa', f) is not None:
+        elif re.match(r'Treatment_[1|2]_moa_[\w]+', f) is not None:
             cat = 'Mode-of-action'
-        elif re.match(r'Treatment_[1|2]_name', f) is not None:
-            cat = 'Drug name'
         elif re.match(r'Treatment_[1|2]_RDK_[0-9]+', f) is not None:
             cat = 'Chemical_Structure_RDK'
         elif re.match(r'Treatment_[1|2]_MACCS_[0-9]+', f) is not None:
@@ -245,6 +237,8 @@ class Downstream_SHAP_Analysis:
             cat = 'Chemical_Structure_FP3'
         elif re.match(r'Treatment_[1|2]_FP4_[0-9]+', f) is not None:
             cat = 'Chemical_Structure_FP4'
+        elif re.match(r'Treatment_[1|2]_name_[\w]+', f) is not None:
+            cat = 'Drug name'
         elif  f.endswith('_snv'):
             cat = 'Molecular_snv'
         elif f.endswith('_cnv'):
@@ -267,6 +261,8 @@ class Downstream_SHAP_Analysis:
             cat = 'CRISPR Cancer Dependency'
         elif f.startswith('Synleth_'):
             cat = 'Synthetic lethality'
+        elif f.startswith('similarity_'):
+            cat = 'Drug similarity'
         else:
             print("Unknown feature found: "+f)
     
@@ -282,9 +278,10 @@ class Downstream_SHAP_Analysis:
         fnames
 
         Yields:
-        SHAP_dir: dict
+        SHAP_all_df: dataframe of SHAP summary
+        shap_fig
         """
-        SHAP_all_df = {'feature':fnames, 'mean|SHAP val|':[], 'dir(Pearsonr-SHAP)':[], 'dir(Pearsonr-gs)':[]}#, 'dir(p)':[]}
+        SHAP_all_df = {'feature':fnames, 'feature_type':[] , 'mean|SHAP val|':[], 'dir(Pearsonr-SHAP)':[], 'dir(Pearsonr-gs)':[]}#, 'dir(p)':[]}
         s = shap_vals.toarray()
         f = features.toarray()
         for i,n in enumerate(tqdm(fnames)):
@@ -298,6 +295,7 @@ class Downstream_SHAP_Analysis:
             nan = np.logical_or(np.isnan(x), np.isnan(y))
             cor2 = np.corrcoef(x[~nan],y[~nan])[0,1]   # groundtruth
             e = abs(s[:,i]).mean()
+            SHAP_all_df['feature_type'].append(self.feature_to_category(n))
             SHAP_all_df['mean|SHAP val|'].append(e)
             #SHAP_all_df['dir(Spearmanr)'].append(cor)
             SHAP_all_df['dir(Pearsonr-SHAP)'].append(cor1)
@@ -305,13 +303,12 @@ class Downstream_SHAP_Analysis:
             #SHAP_all_df['dir(p)'].append(p)
         
         SHAP_all_df = pd.DataFrame.from_dict(SHAP_all_df).sort_values(by = 'mean|SHAP val|', ascending=False)
-        #SHAP_all_df.to_csv(summary_path, index = False)
 
         # summary plot
-        shap.summary_plot(s, f, feature_names = fnames, show=False)
+        shap.summary_plot(s, f, feature_names = fnames, max_display = 50, show=False)
         shap_fig = plt.gcf()
         plt.close()
-        #shap_fig.savefig(summary_plot_path, format='pdf', dpi=1200, bbox_inches='tight')
+
 
         return SHAP_all_df, shap_fig
 
@@ -352,7 +349,7 @@ class Downstream_SHAP_Analysis:
         Mode-of-action: 'Mode-of-action'
         Drug-name: 'Drug name'
         Monotherapy: 'Monotherapy drug efficacy (AoC)'
-        Molecular Biomarkders: 'Molecular_*'
+        Molecular Biomarkers: 'Molecular_*'
         Geneset Annotations: 'Geneset'
         Chemical Structure Fingerprints: 'Chemical_Structure_*'
 
@@ -366,7 +363,7 @@ class Downstream_SHAP_Analysis:
         categories = {"Mode-of-action": r'Mode-of-action',
             "Drug name": r'Drug*',
             "Monotherapy": r'Monotherapy*',
-            "Molecular Biomarkders": r'Molecular_*',
+            "Molecular Biomarkers": r'Molecular_*',
             "Geneset Annotations": r'Geneset',
             "Chemical Structure": r'Chemical_Structure_*',
             "Synthetic lethality": r'Synthetic lethality'}
@@ -424,41 +421,53 @@ class Downstream_SHAP_Analysis:
         df_new = pd.DataFrame.from_dict(df_new).sort_values(by = 'mean|SHAP val|', ascending=False)
         return df_new
 
-    def generate_tissue_specific(self):
+    def generate_subset(self, subset_type):
         """
-        * Locally analysis SHAP on each tissue (TODO: Cell lines)
+        * Locally analysis SHAP on each subset (ie. tissue, moa, ddr, etc.)
         
         Params:
             self.gene_fpaths
             self.top_genes
             self.pred_target
+            subset_type: type of subset to analysis (e.g. 'moa', 'ddr', 'tissue')
 
         Yields:
-            df: tissue specificity based on SHAP value correlation
+            df: subset SHAP analysis results
             
         """
         # substract SHAP for each tissue (cancer type and cancer subtype)
         all_Test = []
         for f in sorted(self.all_SHAPpath):
             idx = f.split('_')[-1].split('.')[0]
-            # look into data row idex 
-            if self.moa_pair == '':
-                testpath = '../../../test_by_cell_line/fold_'+idx+'/Test.tsv'   # this is for cell line model only! TODO: make this to cross-indication too
-            else:
-                testpath = '../../../test_by_cell_line/fold_'+idx+'/'+self.subset+'/'+self.moa_pair+'.tsv'
-            print(testpath)
+            # look into data row idex
+            # get cv type from absolute path
+            split_type = os.path.abspath('.').split('/')[-3].replace('experiment_','') # test_by_cell_line or test_by_indication
+            testpath = '../../../'+split_type+'/fold_'+idx+'/'+self.test_data+'.tsv' 
+            #TODO: add validation set
             Test = pd.read_csv(testpath, sep = '\t')
             all_Test.append(Test)
         all_Test = pd.concat(all_Test)
         all_Test = all_Test[all_Test['.response_'+self.pred_target].notna()].reset_index(drop = True)
-        for tissue in sorted(set(all_Test['.metadata_cancer_type'])): # '.metadata_cancer_subtype'
-            idx = all_Test.index[all_Test['.metadata_cancer_type'] == tissue]
+        # moa combination
+        all_Test['moa_combination'] = ['-'.join(sorted([r['.metadata_moa_1'],r['.metadata_moa_2']])) for i,r in all_Test.iterrows()]
+        # ddr backbone
+        all_Test['ddr_partner_type'] = ['ATMi' if r['.metadata_moa_1'] == 'ATMi' or r['.metadata_moa_2'] == 'ATMi' else 'ATRi' if r['.metadata_moa_1'] == 'ATRi' or r['.metadata_moa_2'] == 'ATRi' else 'DNAPKi' if r['.metadata_moa_1'] == 'DNAPKi' or r['.metadata_moa_2'] == 'DNAPKi' else 'other' for i,r in all_Test.iterrows()]
+        if subset_type == 'moa':
+            subset_col = 'moa_combination'
+            # only get moa combinations of ATMi-ATRi, ATRi-PARPi, ATRi-TOPi, ATRi-Cytostatic_Antimetabolite, and DNAPKi-IR
+            all_Test = all_Test[all_Test['moa_combination'].isin(['ATMi-ATRi', 'ATRi-PARPi', 'ATRi-TOP1i', 'ATRi-Cytostatic_Antimetabolite', 'DNAPKi-IR'])].reset_index(drop = True)
+            print("selected moa:",all_Test.shape, all_Test['moa_combination'].unique())
+        elif subset_type == 'ddr':
+            subset_col = 'ddr_partner_type'
+        elif subset_type == 'tissue':
+            subset_col = '.metadata_cancer_type'
+        for subset in sorted(set(all_Test[subset_col])):
+            idx = all_Test.index[all_Test[subset_col] == subset]
             sub_shap = self.all_shap[idx,:]
             sub_features = self.all_features[idx,:]
             sub_gs = self.all_gs[idx]
-            yield tissue, sub_shap, sub_features, sub_gs
+            yield subset, sub_shap, sub_features, sub_gs
 
-    # TODO: synthetic lethality
     def Analyse_top_feature_interation_network(self):
         """
         * Draw interaction map between top genes
@@ -507,44 +516,17 @@ def main():
         
     # global top features from SHAP 
     
+    
     path = glob('../Test/')
     for p in path:
-        tab = p.split('/')
-        moa_pair = tab[2]
-        subset = tab[1]
-        Downstream_SHAP_Analysis(pred_target = 'aoc', moa_pair = moa_pair, subset= subset)
-        Downstream_SHAP_Analysis(pred_target = 'bliss', moa_pair = moa_pair, subset= subset)
-
+        Downstream_SHAP_Analysis(pred_target = 'aoc', shap_path = p)
+        Downstream_SHAP_Analysis(pred_target = 'bliss', shap_path = p)
+    
     path = glob('../Train/')
     for p in path:
-        tab = p.split('/')
-        moa_pair = tab[2]
-        subset = tab[1]
-        Downstream_SHAP_Analysis(pred_target = 'aoc', moa_pair = moa_pair, subset= subset)
-        Downstream_SHAP_Analysis(pred_target = 'bliss', moa_pair = moa_pair, subset= subset)
-    
-    """
-    #TO DO: fix these code as global
-    # ATM/ATR/DNAPK-* combination treatment specific top features from SHAP
-    moas = glob('../moa/*')
-    for m in moas:
-        moa = m.split('/')[-1]
-        print(moa)
-        Downstream_SHAP_Analysis(pred_target = 'aoc',  moa_pair = moa, subset= 'moa')
-        Downstream_SHAP_Analysis(pred_target = 'bliss', moa_pair = moa, subset = 'moa')
+        Downstream_SHAP_Analysis(pred_target = 'aoc', shap_path = p)
+        Downstream_SHAP_Analysis(pred_target = 'bliss', shap_path = p)
 
-    """
-    
-    # moa-pair treatment specific top features from SHAP
-    moa_pairs = glob('../all_moa/*')
-    for m in moa_pairs:
-        tab = m.split('/')
-        subset = tab[1]
-        moa_pair = tab[2]
-        if moa_pair in ['ATMi_ATRi', 'ATRi_PARPi', 'ATRi_TOP1i', 'ATRi_Cytostatic_Antimetabolite', 'DNAPKi_IR']:
-            print(moa_pair)
-            #Downstream_SHAP_Analysis(pred_target = 'aoc',  moa_pair = moa_pair, subset= subset)
-            Downstream_SHAP_Analysis(pred_target = 'bliss',  moa_pair = moa_pair, subset= subset)
 
 
 if __name__ == '__main__':

@@ -1,138 +1,182 @@
-# DDR Drug Synergy Prediction
+# Merck DDR Drug Synergy Prediction
 
 This repository contains the code for DDR drug Synergy Prediction.
 
+![Figure1. Overview of the DDR comination drug response model.]("./figures/Figure1_model.png")
+
 Our LightGBM incorporate the following four types of features:
-* Monotherapy experiment efficacy score (AoC)
-* Molecular Markers
-* Drug Chemical Structure
-* Gene Network
 
-## Dependency
+* basic drug information: drug name and mode of action
+* monotherapy experiment efficacy score (AoC)
+* drug chemical structure
+* molecular signatures: cnv, snv, exp, lof signatures of ~2,700 DDR genes, coh/lof patterns of gene sets, and 78 ddr signatures
+* drug-target interactions
+* tissue-specific gene networks
+* synthetic lethality
 
-1. model implementation:
+## Dependencies
+
+For building machine learning model:
 * [Python 3.0](https://www.python.org/download/releases/3.0/)
 * [LightGBM 2.3.2](https://lightgbm.readthedocs.io/en/latest/index.html)
 
-2. to preprocess chemical structure features, the following packages should have been installed:
+To preprocess chemical structure features, the following packages should have been installed:
 * [rdkit](https://www.rdkit.org/docs/Install.html)
 * [pubchempy 1.0.4](https://pubchempy.readthedocs.io/en/latest/guide/install.html) 
 * [openbabel](https://open-babel.readthedocs.io/en/latest/UseTheLibrary/PythonInstall.html)
 * [pybel 0.14.10](https://pypi.org/project/pybel/)
 
-3. to retrieve target gene information: 
-* [chembl_webresource_client](https://github.com/chembl/chembl_webresource_client)
+To retrieve target gene information:
+* from ChemBL: [chembl_webresource_client](https://github.com/chembl/chembl_webresource_client)
+* from LINCS: https://lincs.hms.harvard.edu/db/datasets/20000/results?search=&output_type=.csv
+* from DGI: https://dgidb.org/downloads
 
-* Download LINCS dataset for drug-target information in './QC'
-  ```
-  wget https://lincs.hms.harvard.edu/db/datasets/20000/results?search=&output_type=.csv
-  ```
-4. downstream feature analysis
-* [shap 0.39.0](https://pypi.org/project/shap/)
+To retrieve the tissue-specific gene networks:
+* [HumanBase](https://hb.flatironinstitute.org)
 
-## Data Structure
+To retrieve synthetic lethality information: 
+* [SynLethDB 2.0](https://synlethdb.sist.shanghaitech.edu.cn/v2/)
 
-This repository contains the following code, where all the rest of data in this project can be generated from:
+The training data of this project can be accessed from the public repository Open Science Framework (OSF):
+* DDR combination treatment responses and dose-response matrix: https://osf.io/8hbsx/
+* molecular signatures: https://osf.io/8mxgj/
 
-- `feature`: for data preparation
-	- `data`: deposit the drug response data, geneset, chemical structure, molecular readouts etc.
- 	- 1. `responses_training.tsv`: drug responses for prediction, including combination therapy and monotherapy. the later will be used as features.
- 	- 2. `genesets.tsv`: geneset annotations from literature
- 	- 3. `molecular_features.tsv`: molecular features for all cell lines on gene level, including exp, lof, snv, cnv, lof_pat, coh_pat, ddr
-	- 4. `chemical_structures.csv`: chemical structure of small molecule drugs in smile format
+
+## Repository Structure
+
+This repository contains the following code, where all the rest of data in this project can be carried out in the following steps
+
+### Data Preparation
+
+- `./feature`: before we run the model, all required data, QC and features are preprocessed in this folder. it includes the following subdirectories:
+
+  - `./data`
+  - `./QC`
+  - `./chemical_structure_features`
+  - `./drug_similarity_features`  
+  - `./mode_of_action`
+  - `./monotherapy_features`
+  - `./target_gene`
+  - `./geneset_features`
+  - `./molecular_features`
+  - `./synthetic_lethality_features`
+  - `./tissue_specific_networks`
+
+From the above subdirectories:
+
+- `data`: deposit the drug response data, geneset, chemical structure, molecular readouts etc.
+ 
+  it contains the main training dataset:
+  - `merck_confidential_responses_training_20200221.tsv`: training and testing sets, including combination therapy and monotherapy. the later will be used as features.
+    
+  - `merck_confidential_genesets_20200414.tsv`: geneset annotations from literature
+    
+  - `merck_confidential_features_20200221.tsv`: molecular features for all cell lines on gene level, including exp, lof, snv, cnv, lof_pat, coh_pat, ddr
+
+  the hold-out validation dataset is also under this folder:
+  - `./hold_out`: hold out validation dataset
+      
+    - `./ho1`: Hold-out set 1 asks for responses of previously unobserved cell lines from known tissue types. 
+    - `./ho2`: Hold-out set 2, you have not seen any responses for these tissues yet, so your model will be confronted with new entries in the ".meta_cancer_*" features that it hasn't seen before. 
+
+All the following subdirectories in the `./features` folder are for storage of different features of the model:
+
+- `chemical_structure_features`
+- `drug_similarity_features`  
+- `mode_of_action`
+- `monotherapy_features`
+- `target_gene`
+- `geneset_features`
+- `molecular_features`
+- `synthetic_lethality_features`
+- `tissue_specific_networks`
+
+To preprocess and quality check of all information above, we use code from the folder `QC`. it contains the following programs:
+
+- `QC.py`: generate all features
   
-  To run this repository smoothly, the four datasets above should be placed under the `/data` directory.
- 	- `QC`: QC and generate features
+  run
 
-- `master:`: the code for model training and evaludation
- 	- `master_code`: LightGBM model for response prediction
- 	- `ensemble`: stacking generation
-
-- `bash.sh`: main command
-
-## Data Storeage, QC and Preprocess
-### QC
-1. start QC and generate features:
   ```
-  cd ./QC
   python QC.py
   ```
+    
+  it contains the following modules that can generate following features:
+    
+  - geneset_qc: 
+    - `./geneset_features/`
+
+  - molecular_qc: 
+    
+    - `./molecular_features/`
+    - `./QC/ddr_genes.txt`
+    
+  - response_qc: 
+    - `./monotherapy_features/monotherapy_features.tsv`
+    - `./reproducibility/`
+    - `./target_genes/all_drugs_summary.csv`
+
+- `QC_visualization.ipynb`: visualize the reproducibility, number and quality of all datasets
+- `pull_drug_target.py`: pull drug target information from public databases we mentioned in the [Dependencies](./README.md##Dependencies).
   
-  `QC.py`: generate following features:
+  it will execute following tasks:
+    - `./target_genes/`
+      - update `all_drugs_summary.csv`
+      - update `drug2gene.json`
     
-    * geneset_qc: 
-        -> `../geneset_features/`
-    
-    * molecular_qc: 
-        -> `../molecular_features/`
-        -> `../target_gene/ddr_genes.txt`
-    
-    * response_qc: 
-        -> `../monotherapy_features/`
-            -> `monotherapy_features.tsv`
-        -> `./reproducibility`
-        -> `../target_gene/`
-            -> `all_drugs_summary.csv`
-    
-    * encode_categorical_feature:
-        -> `../categorical_embedding_features/`
-            -> `batch.json`
-            -> `cell_line.json`
-            -> `moa.json` : mode of action encoding
-            -> `treatment.json` : drug name encoding
-            -> `remark.json`
-            -> `cancer_type.json`
-            -> `cancer_subtype.json`
-
-    * cancer_dependency_qc:
-        -> `./cancer_dependency_features/`: depMap features; may not use. TODO
-
-2. pull drug targets: 
-  ```
-  python pull_drug_target.py
-  ```
-  
-  `pull_drug_target.py`: pull drug target information from public databases.
-  update `./target_gene/`:
-   - 1. the drug target information will be put in `all_drugs_summary.csv`
-   - 2. generate a json file `drug2gene.json` for faster target access.
-
-3. split training and testin dataset by cell line/indication/mode-of-action etc.
-  ```
-  python split_train_test.py 
-  ```
-  see `split_train_test.py` for details.
+- `split_train_test.py`: split the training and testing dataset for the k-fold cross validation, using files in the `./data` folder we mentioned above. the training and testing dataset can be slipted by cell line/tissue types/drug/moa etc. Running this program will generate the following folders in the parent directory:
+    - `test_by_cell_line`
+      - `fold_0`
+        - `Train.tsv`
+        - `Test.tsv`
+      - ... ...
+      - `fold_9`
+        - `Train.tsv`
+        - `Test.tsv`
+      - `hold_out_validation`
+        - `Test.tsv`
 
 
-## Train Final Models and Create SHAP Analysis Plots
+    - `test_by_indication  
+      - `fold_bladder`
+        - `Train.tsv`
+        - `Test.tsv`
+      - ... ...
+      - `fold_sarcoma`
+        - `Train.tsv`
+        - `Test.tsv`
+      - `hold_out_validation`
+        - `Test_cervix.tsv`
+        - `Test_kidney.tsv`
 
-Since we designed different cross-validation settings, two sets of models were constructed parallelly to evaluate the drug synergy prediction under different circunstances.
 
-* Merck_test_by_cell_line : cross indication models
-* Merck_test_by_batch: cross batch models
+### Train Final Models and Create SHAP Analysis Plots
 
-to run the models, run:
+- `./master`: the code for model training and evaludation
+  - `./master_code`: LightGBM model for response prediction, which consists of the following python programs and subdirectory:
+    - `./main.py`
+    - `./build_feature_dataset.py`
+    - `./common.py`
+    - `./models.py`
+    - `./shap_analysis.py`
+    - `./utils.py`
+    - `./downstrean_analysis/`
+
+To check the usage of the program, we run the following command inside the `./master_code` direcotry:
 
 ```
-sh bash.sh
+python main.py --help
 ```
+it would show the instructions on running this model:
 
-for details of training/testing, check the main code by:
-
 ```
-cd master_code
-python main.py -h
-```
-it would show the usage of main pipeline code:
-```
-usage: main.py [-h] [-p PATH] [--exclude_synergy_batch] [--exclude_cell_line]
-               [--exclude_cancer_type] [-s PREDICTED_SCORE]
-               [-f FEATURES [FEATURES ...]]
+usage: main.py [-h] [-p PATH] [--exclude_synergy_batch] [--exclude_cell_line] [--exclude_cancer_type] [-s PREDICTED_SCORE] [-f FEATURES [FEATURES ...]]
+               [--mol_type MOL_TYPE] [--surrogate_gene SURROGATE_GENE] [--surrogate_geneset SURROGATE_GENESET] [--surrogate_synleth SURROGATE_SYNLETH]
+               [--surrogate_chem SURROGATE_CHEM] [--hold_out_test] [--evaluate_shap EVALUATE_SHAP [EVALUATE_SHAP ...]] [--skip_training]
 
 Build drug synergy prediction machine learning models.
 
-optional arguments:
-optional arguments:
+options:
   -h, --help            show this help message and exit
   -p PATH, --path PATH  Path to cross-validation split data
   --exclude_synergy_batch
@@ -153,21 +197,29 @@ optional arguments:
                                     drug_name: drug name as categorical feature;
                                     molecular: four types of single gene molecular biomarkers,two types of gene cluster biomarkers,78 ddr markers;
                                     target_gene: target gene information (target gene information can only be used when molecular information is included);
-                                    network: gene bayesian functional network information.
+                                    network: tissue-specific gene network information from HumanBase.
                                     geneset: 9,450 geneset features;
                                     chemical_structure: drug chemical structure fingerprints;
-                                    dependency: DepMap cancer cell line gene dependency features;
                                     synthetic_lethality: synthetic lethality information
-                                    (default: [monotherapy, moa, drug_name, molecular, target_gene, geneset, chemical_structure, dependency, synthetic_lethality])
+                                    (default: [monotherapy, moa, drug_name, molecular, target_gene, geneset, chemical_structure, synthetic_lethality])
+                                    
+  --mol_type MOL_TYPE    number of top genes for surrogate model:
+                                    chose one from: exp, cnv, snv, lof, coh_pat, lof_pat, ddr
+                                    if not specified, default as None
                                     
   --surrogate_gene SURROGATE_GENE
                          number of top genes for surrogate model:
-                                    chose one from: 2000, 1000, 500, 250, 200, 125, 100, 75, 50, 25, 20, 10,
+                                    chose one from: 10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 150, 250, 500, 1000, 2000
                                     if not specified, default as None
                                     
   --surrogate_geneset SURROGATE_GENESET
                          number of top genes for surrogate model:
-                                    chose one from: 2000, 1000, 500, 250, 200, 125, 100, 75, 50, 25, 20, 10,
+                                    chose one from: 10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 150, 200
+                                    if not specified, default as None
+                                    
+  --surrogate_synleth SURROGATE_SYNLETH
+                         number of top synthetic lethal pairs for surrogate model:
+                                    chose one from: 5, 10, 15, 20, 25, 30, 40, 50, 80, 100, 200, 500
                                     if not specified, default as None
                                     
   --surrogate_chem SURROGATE_CHEM
@@ -175,7 +227,7 @@ optional arguments:
                                     chose one from: MACCS, Morgan, FP2, FP3, FP4, RDK
                                     if not specified, default as None
                                     
-  --held_out_test       if used, test on the held-out set
+  --hold_out_test       if used, test on the hold-out set
   --evaluate_shap EVALUATE_SHAP [EVALUATE_SHAP ...]
                         subset type for subset specific SHAP analysis.
                                     example:
@@ -187,38 +239,80 @@ optional arguments:
                                     'tissue'
                                     
   --skip_training       if used, skip training.
-
 ```
 
 This program will carry out four tasks: 
 * 1. Train Synergy prediction models to predict aoc score (efficacy) and bliss score (synergy), and validate on the validation sets in cross validation. the accuracy will be printed and saved in `cor_aoc.txt` and `cor_bliss.txt`.
 * 2. Carry out SHAP analysis of the drug synergy prediction models.
 * 3. For each of the mode-of-action combination, such as synergetic treatment of ATMi and ATRi drugs, we carry out model validation and SHAP feature importance analysis as well.
-* 4. Print dependency plot of different types of molecular markers of the gene of interest.
+
+There are sample code to run the master code program using different criterias in the parent directory:
+
+- `../bash.sh`
+- `../bash_holdout.sh`
+- `../bash_mol.sh`
+- `../bash_shap.sh`
+- `../bash_topgenes.sh`
+- `../bash_topsynleth.sh`
 
 ### Downstream SHAP feature importance analysis
 
 This part is crucial for analysing potential molecualr biomarkers. 
 
+First, in the following directory:
 ```
-cd master_code
-cd downstream_analysis 
+cd ./downstream_analysis
+```
+
+run the following code:
+```
 python statistical_analysis.py
 ``` 
+
 This program will carry out analysis in the following aspects:
 
 * 1. Analyse SHAP results by feature category.
 * 2. Analyse ddr gene's feature importance by it's molecular features (cnv, snv, lof and exp)
 * 3. Analyse tissue-specific ddr gene features.
-* 4. Analyse the interaction between priorized biomarkers (ddr genes/gene clusters/ddr signature)
+    
 
-get top genes/genesets for surrgate models:
-```
-python select_surrogate_features.py
-```
+### Result Summarization
 
-calculate improved efficacy against baseline:
+Check the following directory for the result summarization"
 
 ```
-python calculate_efficacy.py
+cd ./result_summary
 ```
+the following programs are in this folder:
+
+- `calculate_efficacy.ipynb`: generate the treatment prioritizatiion results, compared to the basedline treatment. (in different cell lines/treatments/moas)
+- `generate_surrogate_model.ipynb`: generate surrogate model features based on shap analysis of the full model
+- `result_summary.py`: summarize the prediction results in cross-validation and hold-out validation in all different validation settings
+- `tissue-specific_results.py`: the prediction results on different tissue types (of the full model)
+- `utils.py`: utilities for the above code
+
+### Post Analysis
+
+Other statistical and visualization results in this paper.
+
+```
+cd ./molceular_analysis
+```
+the following programs are in this folder:
+- `gene_interaction_synergy.py`: generate top interacted genes with the core DDR targets (ATR/ATM/DNAPK) for efficacy and synergy. 
+- ` monotherpay_top_genes.py`: top genes positively/negatively correlated with efficacy in ATRi monotherapy.ge  
+
+
+## Reference
+
+TBD
+
+## Manuscript preparation
+The manuscript/figure/data in this paper are organized by following the format requirements of submissions to Nature Communications.
+- `./Code for figures`
+  - `./plot.R`: generate figures using data
+  - `./data`: pulled directly from project folder
+  - `./souce_data`: the source data for all figures (required by Nature Communications)
+  - `./Figures`: all main and supp figures
+
+

@@ -39,6 +39,38 @@ def quantile_normalize_expression_levels(df):
             df.loc[idx,c] = df_distr[v2i[df.loc[idx,c]]]
     return df
 
+def quantile_normalize_RPPA_levels(df):
+    """
+    Parameters:
+    df: expression level feature 
+    a pandas dataframe
+
+    Yields:
+    df_new: quantiled expression level feature
+    a pandas dataframe
+    """
+    cols = df.columns
+    rppa_cols = [c for c in cols if c.endswith('_RPPA')]
+    
+    df_sorted = []
+    # sort every row of df_sorted by ascending order
+    for idx, r in df.iterrows():
+        sorted_row = sorted(r[rppa_cols].to_list())
+        #print(sorted_row)
+        df_sorted.append(sorted_row)
+    #print(np.array(df_sorted))
+    df_distr = np.mean(np.array(df_sorted), axis = 0)
+    # save the distribution: np.savetxt(df_distr, 'exp_distribution.txt')
+    #print(df_distr)
+    for idx, r in df.iterrows():
+        sorted_row = sorted(r[rppa_cols].to_list())
+        v2i = {sorted_row[i]:i for i in range(len(sorted_row))} #value to index
+        for c in rppa_cols:
+            #print(df.loc[idx,c], df_distr[v2i[df.loc[idx,c]]])
+            df.loc[idx,c] = df_distr[v2i[df.loc[idx,c]]]
+    return df
+
+
 def check_reproducibility(data, datatype, pred_target):
     """ Measure reproducibility of prediction target on datasets
     
@@ -58,11 +90,13 @@ def check_reproducibility(data, datatype, pred_target):
     data = data[data['.response_'+pred_target].notna()]
 
     if datatype == 'synergy':
-        experiments = [frozenset(x) for _,x in data[['.metadata_treatment_remarks','.identifier_sample_name',  '.metadata_treatment_1','.metadata_treatment_2']].iterrows()]
-        #experiments = [frozenset(x) for _,x in data[['.metadata_treatment_1','.metadata_treatment_2']].iterrows()]
+        data['.metadata_treatment_comb'] = ['_'.join(sorted(list(x))) for _,x in data[['.metadata_treatment_1','.metadata_treatment_2']].iterrows()]
+        data['.metadata_treatment_remarks'] = data['.metadata_treatment_remarks'].fillna('')
+        experiments = ['_'.join(x) for _,x in data[['.identifier_sample_name',  '.metadata_treatment_comb', '.metadata_treatment_remarks']].iterrows()]
     elif datatype == 'monotherapy':
-        experiments = [frozenset(x) for _,x in data[['.metadata_treatment_remarks','.identifier_sample_name', '.metadata_treatment']].iterrows()]
-        #experiments = [frozenset(x) for _,x in data[['.metadata_treatment']].iterrows()]
+        data['.metadata_treatment_remarks'] = data['.metadata_treatment_remarks'].fillna('')
+        experiments = ['_'.join(x) for _,x in data[['.identifier_sample_name', '.metadata_treatment','.metadata_treatment_remarks']].iterrows()]
+
     
     data['experiment'] = experiments
     y = collections.Counter(experiments)
@@ -89,14 +123,16 @@ def check_reproducibility(data, datatype, pred_target):
     score_pair = np.array(score_pair)
     
     try:
-        cor, p = stats.pearsonr(score_pair[:,0], score_pair[:,1])
-        print("Reproducibility (Pearson's cor) of "+pred_target+" across replicated experiments on "+datatype+" dataset is", cor, ", p =", p)
-        cor, p = stats.spearmanr(score_pair[:,0], score_pair[:,1])
-        print("Reproducibility (Spearman's cor) of "+pred_target+" across replicated experiments on "+datatype+" dataset is", cor, ", p =", p)
+        cor_pearson, p_pearson = stats.pearsonr(score_pair[:,0], score_pair[:,1])
+        print("Reproducibility (Pearson's cor) of "+pred_target+" across replicated experiments on "+datatype+" dataset is", cor_pearson, ", p =", p_pearson)
+        cor_spearman, p_spearman = stats.spearmanr(score_pair[:,0], score_pair[:,1])
+        print("Reproducibility (Spearman's cor) of "+pred_target+" across replicated experiments on "+datatype+" dataset is", cor_spearman, ", p =", p_spearman)
     except:
         print("no replicates!")
+        cor_pearson, p_pearson = 'nan', 'nan'
+        cor_spearman, p_spearman = 'nan', 'nan'
     
-    return freq_summary
+    return freq_summary, cor_pearson, p_pearson, cor_spearman, p_spearman
     
 def split_monotherapy_synergy(response_df):
     """ Split monotherapy and dual-treatment synergy experimental datasets.
@@ -191,7 +227,7 @@ def construct_monotherapy_response_features(df):
     df_new = {}
     for idx, c_t in enumerate(all_cell_line_treatment):
         r_new = {**{'cell_line.treatment':c_t, **{b:[] for b in all_batch}}}
-        responses = df[df['cell_line.treatment'] == c_t].groupby(by = '.identifier_batch').mean()['.response_aoc']
+        responses = df[df['cell_line.treatment'] == c_t].groupby(by = '.identifier_batch')['.response_aoc'].mean()
         for b in all_batch:
             try:
                 r_new[b] = responses.loc[b]
@@ -200,6 +236,81 @@ def construct_monotherapy_response_features(df):
         df_new.update({idx:r_new})
     df_new = pd.DataFrame.from_dict(df_new, orient = 'index')
     return df_new
+
+def construct_monotherapy_drug_response_network(df):
+    """ Construct Monotherapy drug response network
+    Monotherapy features: drug responses (.response_aoc) from batch Oncolead_000-012 
+    Parameters:
+    -----------
+    df: Pandas dataframe
+        Monotherapy response experimental datasets. 
+        Columns:
+            .identifier_batch
+            .identifier_sample_name
+            .metadata_moa
+            .metadata_treatment_remarks
+            .metadata_treatment
+            .response_aoc
+            .metadata_cancer_type
+            .metadata_cancer_subtype
+    
+    Yields:
+    -------
+    drug_network_features
+
+    """
+    import networkx as nx 
+
+    all_drugs  = df['.metadata_treatment'].unique()
+    # compute median of AoC for each drug-cell line combination
+    df_mono_median = df[['.identifier_sample_name', '.metadata_treatment','.response_aoc']].groupby(['.identifier_sample_name', '.metadata_treatment']).agg(np.median).reset_index()
+    df_mono_median['.response_aoc'] = df_mono_median.groupby('.identifier_sample_name')['.response_aoc'].transform(lambda x: (x-x.min())/(x.max()-x.min()))
+    
+    distance_matrix_mono = np.zeros((len(all_drugs), len(all_drugs)))
+    removed_edges_mono = []
+    distance_matrix_mono_dict = {}
+    drug_rwr_features = {}
+    drug_rwr_features_dict = {}
+
+    for d1 in all_drugs:
+        all_d = []
+        for d2 in all_drugs:
+            df1 = df_mono_median[df_mono_median['.metadata_treatment'] == d1].rename(columns = {'.response_aoc':'aoc_1', '.metadata_treatment':'treatment_1'})
+            df2 = df_mono_median[df_mono_median['.metadata_treatment'] == d2].rename(columns = {'.response_aoc':'aoc_2', '.metadata_treatment':'treatment_2'})
+            tmp = df1.merge(df2, left_on = '.identifier_sample_name', right_on = '.identifier_sample_name', how = 'inner').dropna(axis = 0)
+            if d1==d2:
+                d = 0
+                removed_edges_mono.append((d1, d2))
+            elif tmp.shape[0] >1:
+                d,_ = stats.pearsonr(tmp['aoc_1'], tmp['aoc_2'])
+                d = 1-d
+            else:
+                d = np.NaN
+                removed_edges_mono.append((d1, d2))
+
+            distance_matrix_mono_dict[(d1, d2)] = d
+            distance_matrix_mono[all_drugs == d1, all_drugs == d2] = d
+            all_d.append(d)
+        drug_rwr_features.update({d1:all_d})
+
+    G = nx.DiGraph(np.array(distance_matrix_mono))
+    # relabel the nodes
+    mapping = {i:all_drugs[i] for i in range(len(all_drugs))}
+    G = nx.relabel_nodes(G, mapping)
+    for (u,v) in removed_edges_mono:
+        try:
+            G.remove_edge(u, v)
+        except:
+            pass
+
+    # use random walk with restart to calculate the embeddings 
+    alpha = 0.05
+    aff = []
+    for drug in all_drugs:
+        drug_rwr_features.update({drug:list(nx.pagerank(G, alpha, personalization={drug:1}, weight = 'weight').values())})
+        drug_rwr_features_dict.update({drug:dict(nx.pagerank(G, alpha, personalization={drug:1}, weight = 'weight'))})
+
+    return drug_rwr_features, drug_rwr_features_dict, all_drugs
 
 
 def map_cell_line():
@@ -276,4 +387,5 @@ def build_moa_cancer_dependency(dep):
         all_moa_dep.update({moa:moa_dep})
 
     return all_moa_dep
+
 

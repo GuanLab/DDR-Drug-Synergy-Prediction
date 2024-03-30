@@ -1,4 +1,4 @@
-#usr/bin/env python3
+#sr/bin/env python3
 #author: @rayezh
 
 import pandas as pd
@@ -10,7 +10,7 @@ from utils import encode_categorical_feature
 
 # use average monotherapy instead of separated features
 
-def build_feature_dataset(data, exclude_synergy_batch, exclude_cell_line, exclude_cancer_type, target, features, surrogate_gene, surrogate_geneset, surrogate_chem, if_train = True, return_label = True):
+def build_feature_dataset(data, exclude_synergy_batch, exclude_cell_line, exclude_cancer_type, target, cv_split, features, molecular_subtype, surrogate_gene, surrogate_geneset, surrogate_synleth, surrogate_chem,if_train = True, return_label = True):
     """ Construc feature set
     
     Parameters:
@@ -33,12 +33,16 @@ def build_feature_dataset(data, exclude_synergy_batch, exclude_cell_line, exclud
 
     target: string
         prediction target('aoc' or 'bliss')
+
+    cv_split: string; to use for reading surrogate model type
+        'experiment_test_by_cell_line'
+        'experiment_test_by_indication'
     
-    features: list
-        features to use in prediction.
+    features: list; features to use in prediction.
         monotherapy response
         molecluar
         chemical_structure
+        drug_similarity
         crispr
 
     if_train: boolean
@@ -46,7 +50,7 @@ def build_feature_dataset(data, exclude_synergy_batch, exclude_cell_line, exclud
     
     return_label: boolean
         option to return label (for cross validation)
-        or not to return label (for held-out set prediction, where the label is unknown))
+        or not to return label (for hold-out set prediction, where the label is unknown))
     
     Yields:
     -------
@@ -60,71 +64,71 @@ def build_feature_dataset(data, exclude_synergy_batch, exclude_cell_line, exclud
 
     # load feature datasets
     # monotherapy
-    if 'monotherapy' in features:
-        all_monotherapy = pd.read_csv('../../feature/monotherapy_features/monotherapy_features.tsv', sep = '\t', index_col = 0)
+    monotherapy_train = pd.read_csv('../../feature/monotherapy_features/monotherapy_features.tsv', sep = '\t', index_col = 0) # training set
+    monotherapy_ho1 = pd.read_csv('../../feature/monotherapy_features/monotherapy_features_ho1.tsv', sep = '\t', index_col = 0) # hold-out set 1
+    monotherapy_ho2 = pd.read_csv('../../feature/monotherapy_features/monotherapy_features_ho2.tsv', sep = '\t', index_col = 0) # hold-out set 2  
+    all_monotherapy = pd.concat([monotherapy_train, monotherapy_ho1, monotherapy_ho2], axis = 0) # all monotherapy data
     # chemical structure
-    if 'chemical_structure' in features:
-        all_chemical_structure = pd.read_csv('../../feature/chemical_structure_features/all_chemical_structure.csv', index_col = 0)
-        if surrogate_chem is not None:
-            cols = [i for i in all_chemical_structure.columns if i.startswith(surrogate_chem)]
-            all_chemical_structure = all_chemical_structure[cols]
-            #print(all_chemical_structure)
+    all_chemical_structure = pd.read_csv('../../feature/chemical_structure_features/all_chemical_structure.csv', index_col = 0)
+    # surrogate chemical structure features
+    if surrogate_chem is not None:
+        cols = [i for i in all_chemical_structure.columns if i.startswith(surrogate_chem)]
+        all_chemical_structure = all_chemical_structure[cols]
+        #print(all_chemical_structure)
+    
+    # rwr
+    drug_similarity = pickle.load(open('../../feature/drug_similarity_features/drug_similarity_features.pkl', 'rb')) # training set
+    drug_similarity_dict = pickle.load(open('../../feature/drug_similarity_features/drug_similarity_features_dict.pkl', 'rb'))
 
-    # molecular markers
-    if 'molecular' in features:
-        all_molecular = pd.read_csv('../../feature/molecular_features/quantiled_molecular_features.tsv', sep = '\t', index_col = 0)
-        # TODO: add mol_type = ['exp', 'cnv', 'snv', 'lof', 'coh_pat', 'lof_pat', 'ddr'] 
-        #all_molecular = pd.read_csv('../../feature/molecular_features/'+mol_type+'_molecular_features.tsv', sep = '\t', index_col = 0)  # coh_pat
-        if surrogate_gene is not None:
-            surrogate_features = pickle.load(open('./downstream_analysis/surrogate_models/'+target+'_surrogate_gene_'+str(surrogate_gene)+'.pkl', 'rb'))
-            all_molecular = all_molecular[surrogate_features]
-            #print(all_molecular)
+    # molecular markers  
+    all_molecular = pd.read_csv('../../feature/molecular_features/quantiled_merck_confidential_features_20200221.tsv', sep = '\t', index_col = 0)
+    full_molecular = pd.read_csv('../../feature/molecular_features/quantiled_merck_confidential_features_20200221.tsv', sep = '\t', index_col = 0) # for synthetlic lethality feature
+    if molecular_subtype:
+        all_molecular = pd.read_csv('../../feature/molecular_features/'+molecular_subtype+'_merck_confidential_features_20200221.tsv', sep = '\t', index_col = 0)
+    
+    # surrogate molecular features
+    if surrogate_gene is not None: # now only use it for exp
+        surrogate_features = pickle.load(open('../../surrogate_models/'+cv_split+'/features_monotherapy_moa_geneset_molecular_synthetic_lethality_target_gene_network_chemical_structure_drug_name/'+target+'_surrogate_Molecular_exp_'+str(surrogate_gene)+'.pkl', 'rb'))
+        all_molecular = all_molecular[surrogate_features]
+        #print(all_molecular)
     
     # geneset annotations
-    if 'geneset' in features:
-        geneset = pd.read_csv('../../feature/geneset_features/geneset_features.csv', index_col = 0)
-        if surrogate_geneset is not None:
-            surrogate_features = pickle.load(open('./downstream_analysis/surrogate_models/'+target+'_surrogate_geneset_'+str(surrogate_geneset)+'.pkl', 'rb'))
-            surrogate_features =  [x.split('Geneset_')[1] for x in surrogate_features]
-            geneset = geneset.loc[list(surrogate_features),]
-            #print(geneset)
-
-    if 'dependency' in features:
-        # depmap dependency
-        ceres_cancer_dependency = json.load(open('../../feature/cancer_dependency_features/integrated_Sanger_Broad_essentiality_matrices_20200402/CERES_FC_dep.json', 'r'))
-        crisprclear_cancer_dependency = json.load(open('../../feature/cancer_dependency_features/integrated_Sanger_Broad_essentiality_matrices_20200402/CRISPRcleanR_FC_dep.json', 'r'))
-
+    geneset = pd.read_csv('../../feature/geneset_features/geneset_features.csv', index_col = 0)
+    # surrogate geneset features
+    if surrogate_geneset is not None:
+        surrogate_features = pickle.load(open('../../surrogate_models/'+cv_split+'/features_monotherapy_moa_geneset_molecular_synthetic_lethality_target_gene_network_chemical_structure_drug_name/'+target+'_surrogate_Geneset_'+str(surrogate_geneset)+'.pkl','rb'))
+        surrogate_features =  [x.split('Geneset_')[1] for x in surrogate_features]
+        geneset = geneset.loc[list(surrogate_features),]
+        #print(geneset)
+    
     # synthetic lethality
-    if 'synthetic_lethality' in features:
-        synleth = pd.read_csv('../../feature/synthetic_lethality_features/new_Human_SL.csv')
-        synleth_dic = {}
-        for _,r in synleth.iterrows(): 
-            synleth_dic.update({(r['gene_a.name'],r['gene_b.name']):r["SL.statistic_score"]})
-            #synleth_dic.update({(r['gene_b.name'],r['gene_a.name']):r["SL.statistic_score"]})
-        #gene rank
-        exp2rk = pickle.load(open('../../feature/QC/exp_rank.pkl', 'rb'))
-
-    if 'target_gene' in features:
-        # load drug-specific target gene information
-        drug2gene = json.load(open('../../feature/target_gene/drug2gene.json','r'))
-        drug2gene = defaultdict(lambda:[], drug2gene)
+    synleth = pd.read_csv('../../feature/synthetic_lethality_features/Human_SL_0.8.csv')
+    #surrogate synthetic lethality features (this feature is independent of molecular features)
+    if surrogate_synleth is not None:
+        surrogate_features = pickle.load(open('../../surrogate_models/'+cv_split+'/features_monotherapy_moa_geneset_molecular_synthetic_lethality_target_gene_network_chemical_structure_drug_name/'+target+'_surrogate_Synthetic lethality_'+str(surrogate_synleth)+'.pkl','rb'))
+        surrogate_features =  [x.split('Synleth_')[1] for x in surrogate_features]
+        synleth['pairs'] = ['_'.join([r['n1.name'],r['n2.name']]) for _, r in synleth.iterrows()]
+        # select rows that 'pairs' in surrogate features
+        synleth = synleth[synleth['pairs'].isin(surrogate_features)]
+        #print(synleth)
+    # set the score cutoff
+    synleth = synleth[synleth['r.statistic_score']>0.8]
+    synleth_dic = {}
+    for _,r in synleth.iterrows(): 
+        synleth_dic.update({(r['n1.name'],r['n2.name']):r["r.statistic_score"]})
+    #gene rank
+    exp2rk = pickle.load(open('../../feature/QC/exp_rank.pkl', 'rb'))
+    
+    # load drug-specific target gene information
+    drug2gene = json.load(open('../../feature/target_gene/drug2gene.json','r'))
+    drug2gene = defaultdict(lambda:[], drug2gene)
 
     # load gene network information from mousenet
-    if 'network' in features:
-        network = pickle.load(open('../../feature/mousenet_features/target_gene_network.pkl','rb'))
+    #network = pickle.load(open('../../feature/mousenet_features/target_gene_network.pkl','rb'))
+    tissue_network = pickle.load(open('../../feature/tissue_specific_networks/all_network.pkl','rb'))
 
     # categotical encoding
-    if 'moa' in features:
-        encode_moa = json.load(open('../../feature/categorical_embedding_features/moa.json', 'r'))
-    if 'drug_name' in features:
-        encode_treatment = json.load(open('../../feature/categorical_embedding_features/treatment.json', 'r'))
-    if not exclude_synergy_batch:
-        encode_batch = json.load(open('../../feature/categorical_embedding_features/batch.json', 'r'))
-    if not exclude_cell_line:
-       encode_cell_line = json.load(open('../../feature/categorical_embedding_features/cell_line.json', 'r')) 
-    if not exclude_cancer_type:
-        encode_cancer_type = json.load(open('../../feature/categorical_embedding_features/cancer_type.json', 'r'))
-        encode_cancer_subtype = json.load(open('../../feature/categorical_embedding_features/cancer_subtype.json', 'r'))
+    encode = encode_categorical_feature() 
 
     def build_features(row, exclude_synergy_batch, exclude_cell_line, exclude_cancer_type, features):
         """ Build up all types of features
@@ -152,7 +156,6 @@ def build_feature_dataset(data, exclude_synergy_batch, exclude_cell_line, exclud
             .metadata_cancer_type   
             .metadata_cancer_subtype
             .metadata_treatment_remarks
-
             Params
             ------
             row: Pandas row series
@@ -165,43 +168,50 @@ def build_feature_dataset(data, exclude_synergy_batch, exclude_cell_line, exclud
             feature_names: list
             feature_values: list
             """
-            features = {}
+            feature_values = []
+            feature_names = []
 
             if exclude_synergy_batch:
                 pass
             else:
+                feature_names.extend('Synergy_batch_'+encode.batch_name)
                 try:
-                    features.update({"Synergy_batch": encode_batch[row['.identifier_batch']]})
+                    feature_values.extend(encode.batch[row['.identifier_batch']])
                 except:
-                    features.update({"Synergy_batch": np.nan})
+                    feature_values.extend([np.nan]*len(encode.batch_name))
+                    print("No synergy batch data of "+row['.identifier_batch']+"! Replace with NaN!")
             
             if exclude_cell_line:
                 pass
             else:
+                feature_names.extend('Cell_line_'+encode.cell_line_name)
                 try:
-                    features.update({"Cell_line": encode_cell_line[row['.identifier_sample_name']]})
+                    feature_values.extend(encode.cell_line[row['.identifier_sample_name']])
                 except:
-                    features.update({"Cell_line": np.nan})
+                    feature_values.extend([np.nan]*len(encode.cell_line_name))
+                    print("No cell line data of "+row['.identifier_sample_name']+"! Replace with NaN!")
             
             if exclude_cancer_type:
                 pass
             else:
+                feature_names.extend('Cancer_type_'+encode.cancer_type_name)
+                feature_names.extend('Cancer_subtype_'+encode.cancer_subtype_name)
                 try:
-                    features.update({"Cancer_type": encode_cancer_type[row['.metadata_cancer_type']]})
+                    feature_values.extend(encode.cancer_type[row['.metadata_cancer_type']])
                 except:
-                    features.update({"Cancer_type": np.nan})
+                    feature_values.extend([np.nan]*len(encode.cancer_type_name))
+                    print("No cancer type data of "+row['.metadata_cancer_type']+"! Replace with NaN!")
                 try:
-                    features.update({"Cancer_subtype": encode_cancer_subtype[row['.metadata_cancer_subtype']]})
+                    feature_values.extend(encode.cancer_subtype[row['.metadata_cancer_subtype']])
                 except:
-                    features.update({"Cancer_subtype": np.nan})
+                    feature_values.extend([np.nan]*len(encode.cancer_subtype_name))
+                    print("No cancer subtype data of "+row['.metadata_cancer_subtype']+"! Replace with NaN!")
             """
             try:
-                features.update({"Concentration": encode_remark[str(row['.metadata_treatment_remarks'])]})
+                features.update({"Concentration": encode.remark[str(row['.metadata_treatment_remarks'])]})
             except:
                 features.update({"Concentration": np.nan})
             """
-            feature_names = list(features.keys())
-            feature_values = list(features.values())
             
             return feature_names, feature_values
         
@@ -221,8 +231,8 @@ def build_feature_dataset(data, exclude_synergy_batch, exclude_cell_line, exclud
             feature_values = []
             for i in ['1','2']:
                 moa = row['.metadata_moa_'+i]
-                feature_names.extend(['Treatment_'+i+'_moa'])
-                feature_values.extend([encode_moa[moa]])
+                feature_names.extend('Treatment_'+i+'_moa_'+encode.moa_name)
+                feature_values.extend(encode.moa[moa])
 
             return feature_names, feature_values
 
@@ -242,8 +252,8 @@ def build_feature_dataset(data, exclude_synergy_batch, exclude_cell_line, exclud
             feature_values = []
             for i in ['1','2']:
                 treatment = row['.metadata_treatment_'+i]
-                feature_names.extend(['Treatment_'+i+'_name'])
-                feature_values.extend([encode_treatment[treatment]])
+                feature_names.extend('Treatment_'+i+'_name_'+encode.treatment_name)
+                feature_values.extend(encode.treatment[treatment])
 
             return feature_names, feature_values
 
@@ -276,7 +286,7 @@ def build_feature_dataset(data, exclude_synergy_batch, exclude_cell_line, exclud
                     
             return feature_names, feature_values
 
-        def molecular_feature(row, include_target_gene = False, include_network =  False):
+        def molecular_feature(row, include_target_gene = False, include_network =  False, for_synthetic = False):
             """ Molecular features
             
             Params
@@ -287,16 +297,24 @@ def build_feature_dataset(data, exclude_synergy_batch, exclude_cell_line, exclud
             include_network: boolean
                 include network information or not
                 can only be set to true if include_target_gene is true
+            if_full: boolean
+                if include all molecular features or not
+                for synthetic lethality feature precompute, we also need to include all molecular features
 
             Yields
             ------
             feature_names: list
             feature_values: list
             """
-
-            mol = all_molecular.loc[row['.identifier_sample_name']].copy()
+            if for_synthetic:
+                mol = full_molecular.loc[row['.identifier_sample_name']].copy()
+            else:
+                mol = all_molecular.loc[row['.identifier_sample_name']].copy()
+            #print(row['.metadata_cancer_type'])
+            network = tissue_network[row['.metadata_cancer_subtype']]
+            #print(network)
             
-            # include target gene information
+            # include target gene information in exp, cnv, lof, snv
             if include_target_gene:
                 # get target genes from treatment 1 and 2
                 target_genes = set(drug2gene[row['.metadata_treatment_1']]+drug2gene[row['.metadata_treatment_2']])
@@ -312,12 +330,16 @@ def build_feature_dataset(data, exclude_synergy_batch, exclude_cell_line, exclud
                     # maximum relationship with target genes
                     p2target = defaultdict(lambda:0)
                     for target_gene in target_genes:
-                        for k, v in network[target_gene].items():
-                            if v>p2target[k]:
-                                p2target[k] = v
+                        if target_gene in network:
+                            #print(network[target_gene])
+                            for k, v in network[target_gene].items():
+                                if v>p2target[k]:
+                                    p2target[k] = v
+                                
                     for k,v in p2target.items():
                         if k+'_exp' in mol.index:
                             mol[k+'_exp'] = mol[k+'_exp']*(1-v)
+                            #print(mol[k+'_exp'])
 
             feature_names = list(mol.index)
             feature_values = list(mol)
@@ -384,49 +406,6 @@ def build_feature_dataset(data, exclude_synergy_batch, exclude_cell_line, exclud
             
             return feature_names, feature_values
 
-        def cancer_dependency_feature(row):
-            """ Cancer dependency feature
-            
-            Params
-            ------
-            row: Pandas row series
-            
-            Yields
-            ------
-            feature_names: list
-            feature_values: list
-            """
-            cell = row['.identifier_sample_name']
-            moas = [row['.metadata_moa_1'], row['.metadata_moa_2']]
-            
-            feature_names = []
-            feature_values = []
-
-            for i in ['ceres', 'crispr']:
-                f_name = 'CRISPR_cancer_dependency_'+i
-                if i == 'ceres':
-                    df = ceres_cancer_dependency
-                if i == 'crispr':
-                    df = crisprclear_cancer_dependency
-                for j in ['max']: # max dependency
-                    f_name = f_name+'_'+j
-                    feature_names.append(f_name)
-                    try:
-                        v = []
-                        for moa in moas:
-                            v.append(df[moa][cell][j])
-                        if j == 'max':
-                            v = max(v)
-                        elif j == 'mean':
-                            v = np.mean(v)
-                        elif j == 'min':
-                            v = min(v)
-                    except:
-                        v = np.nan
-                    feature_values.append(v)
-
-            return feature_names, feature_values
-
         def synthetic_lethality_feature(mol_name, mol_feature):
             """ Synthetic lethality feature
 
@@ -445,16 +424,10 @@ def build_feature_dataset(data, exclude_synergy_batch, exclude_cell_line, exclud
 
             #exp
             idx_exp = [i for i,j in enumerate(mol_name) if j.split('_')[1] =='exp']
-            f_exp = {mol_name[i].split('_')[0]:mol_feature[i] for i in idx_exp}
-            n_exp = [mol_name[i].split('_')[0] for i in idx_exp]
-
-            #lof
-            idx_lof = [i for i,j in enumerate(mol_name) if j.split('_')[1] =='lof']
-            f_lof = {mol_name[i].split('_')[0]:mol_feature[i] for i in idx_lof}
-            n_lof = [mol_name[i].split('_')[0] for i in idx_lof]
+            f_exp = {mol_name[i].split('_')[0]:mol_feature[i] for i in idx_exp} # {gene:expression value}
+            n_exp = [mol_name[i].split('_')[0] for i in idx_exp] # name of genes with expression data
 
             feature_exp = 0
-            #feature_lof = 0
             
             for k in synleth_dic:
                 gene_a = k[0]
@@ -462,19 +435,19 @@ def build_feature_dataset(data, exclude_synergy_batch, exclude_cell_line, exclud
                 syn = synleth_dic[k]
                 if (gene_a in n_exp) and (gene_b in n_exp):
                     feature_n = "Synleth_"+('_').join(sorted([gene_a,gene_b]))
-                    #print(gene_a, np.round(f_exp[gene_a],4))
-                    #print(gene_b, np.round(f_exp[gene_b],4))
-                    #feature_v = max(exp2rk[gene_a][np.round(f_exp[gene_a],4)],exp2rk[gene_b][np.round(f_exp[gene_b],4)])
-                    rk_a = f_exp[gene_a]/exp2rk[gene_a]['median']
-                    rk_b = f_exp[gene_b]/exp2rk[gene_b]['median']
-                    #feature_v = max(rk_a,rk_b)
-                    feature_v = 1/(rk_a*rk_b+0.001)
+                    rk_a = (f_exp[gene_a]-exp2rk[gene_a]['mean'])/exp2rk[gene_a]['sd'] # normalized expression by median expression level
+                    rk_b = (f_exp[gene_b]-exp2rk[gene_b]['mean']/exp2rk[gene_b]['sd'])
+                    feature_v = max(rk_a,rk_b)/syn # synthetic lethality: both genes are silenced
+                    
                     feature_names.append(feature_n)
                     feature_values.append(feature_v)
-                #if (gene_a in n_lof) and (gene_b in n_lof):
-                #    lof = 1-syn*f_lof[gene_a]*f_lof[gene_b]
-                #    if feature_lof < lof:
-                #        feature_lof = lof
+            
+            max_syn = min(feature_values)
+            mean_syn = np.mean(feature_values)
+            min_syn = max(feature_values)
+            feature_values = feature_values+[max_syn, mean_syn, min_syn]
+            feature_names = feature_names+['Synleth_max', 'Synleth_mean', 'Synleth_min']
+            #print(feature_values, max_syn)
 
             return feature_names, feature_values
 
@@ -490,6 +463,11 @@ def build_feature_dataset(data, exclude_synergy_batch, exclude_cell_line, exclud
             moa_name, moa_feature = moa_feature(row)
             feature_names += moa_name
             feature_values += moa_feature
+
+        if 'geneset' in features:
+            g_name, g_feature = geneset_feature(row)
+            feature_names += g_name
+            feature_values += g_feature
         
         if 'drug_name' in features:
             dr_name, dr_feature = drug_name_feature(row)
@@ -518,23 +496,18 @@ def build_feature_dataset(data, exclude_synergy_batch, exclude_cell_line, exclud
             feature_names += mol_name
             feature_values += mol_feature
 
-        if 'geneset' in features:
-            g_name, g_feature = geneset_feature(row)
-            feature_names += g_name
-            feature_values += g_feature
-
-        if 'dependency' in features:
-            dep_name, dep_feature = cancer_dependency_feature(row)
-            feature_names += dep_name
-            feature_values += dep_feature
-
         if 'synthetic_lethality' in features:
+            include_target_gene = False
+            include_network = False
+            if 'target_gene' in features:
+                include_target_gene = True
+                if 'network' in features:
+                     include_network = True
             #syn_name, syn_feature = synthetic_lethality_feature(row)
-            if not('molecular' in features):
-                mol_name, mol_feature = molecular_feature(row, include_target_gene = True, include_network = True)
-            syn_name, syn_feature = synthetic_lethality_feature(mol_name, mol_feature)
+            mol_name_syn, mol_feature_syn = molecular_feature(row, include_target_gene, include_network, for_synthetic = True)
+            syn_name, syn_feature = synthetic_lethality_feature(mol_name_syn, mol_feature_syn)
             feature_names += syn_name
-            feature_values += syn_feature    
+            feature_values += syn_feature   
 
         return feature_names, feature_values
     
@@ -574,5 +547,3 @@ def build_feature_dataset(data, exclude_synergy_batch, exclude_cell_line, exclud
     Y = np.array(Y)
 
     return feature_names, X, Y
-
-
