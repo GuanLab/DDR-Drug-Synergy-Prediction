@@ -302,12 +302,4 @@ the following programs are in this folder:
 
 TBD
 
-## Manuscript preparation
-The manuscript/figure/data in this paper are organized by following the format requirements of submissions to Nature Communications.
-- `./Code for figures`
-  - `./plot.R`: generate figures using data
-  - `./data`: pulled directly from project folder
-  - `./souce_data`: the source data for all figures (required by Nature Communications)
-  - `./Figures`: all main and supp figures
-
 
