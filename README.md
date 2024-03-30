@@ -2,9 +2,9 @@
 
 This repository contains the code for DDR drug Synergy Prediction.
 
-![Figure1. Overview of the DDR comination drug response model.](Figure1_model.png)
+![Figure1. Overview of the DDR combination drug response model.](Figure1_model.png)
 
-Our LightGBM incorporate the following four types of features:
+Our LightGBM incorporates the following four types of features:
 
 * basic drug information: drug name and mode of action
 * monotherapy experiment efficacy score (AoC)
@@ -66,12 +66,7 @@ From the above subdirectories:
 
 - `data`: deposit the drug response data, geneset, chemical structure, molecular readouts etc.
  
-  it contains the main training dataset:
-  - `merck_confidential_responses_training_20200221.tsv`: training and testing sets, including combination therapy and monotherapy. the later will be used as features.
-    
-  - `merck_confidential_genesets_20200414.tsv`: geneset annotations from literature
-    
-  - `merck_confidential_features_20200221.tsv`: molecular features for all cell lines on gene level, including exp, lof, snv, cnv, lof_pat, coh_pat, ddr
+  it contains the main training dataset obtained from OSF: [https://osf.io/8hbsx/](https://osf.io/8hbsx/)
 
   the hold-out validation dataset is also under this folder:
   - `./hold_out`: hold out validation dataset
