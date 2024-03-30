@@ -2,7 +2,7 @@
 
 This repository contains the code for DDR drug Synergy Prediction.
 
-![Figure1. Overview of the DDR comination drug response model.]('Figure1_model.png')
+![Figure1. Overview of the DDR comination drug response model.](Figure1_model.png)
 
 Our LightGBM incorporate the following four types of features:
 
