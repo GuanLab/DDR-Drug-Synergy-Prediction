@@ -165,19 +165,23 @@ def run(path, exclude_synergy_batch, exclude_cell_line, exclude_cancer_type, pre
     
     if hold_out_test: # test the best model on hold-out set
         hold_out_path = path+'/hold_out_validation/*.tsv'
-        os.makedirs('./hold_out', exist_ok = True)
+        os.makedirs('./hold_out_validation', exist_ok = True)
         for f in glob(hold_out_path):
             subtype = f.split('/')[-1].split('.')[0]
             print(subtype) # for cell line, print Test; for indication, print Test_kidney and Test_cervix
-            new_path = './hold_out/'+subtype+'/'
+            new_path = './hold_out_validation/'+subtype+'/'
             os.makedirs(new_path, exist_ok = True)
+
+            # evaluate SHAP analysis
+            evaluate_SHAP_analysis_on_holdout(path, 'Test', exclude_synergy_batch, exclude_cell_line, exclude_cancer_type, predicted_score, features, mol_type, surrogate_gene, surrogate_geneset, surrogate_synleth, surrogate_chem)
+
             eva_df, eva_all = predict_on_hold_out(f, new_path, exclude_synergy_batch, exclude_cell_line, exclude_cancer_type, predicted_score, features, mol_type, surrogate_gene, surrogate_geneset, surrogate_synleth, surrogate_chem)
             eva_df["features"] = "+".join(features)
             eva_df.to_csv(new_path+'cor_'+predicted_score+'.csv', index = False)
             result = open(new_path+'cv-95ci_'+predicted_score+'.txt', 'w')
             result.write(eva_all)
             result.close()
-
+            
     # carry out SHAP
     if evaluate_shap is not None:
         for subset_type in evaluate_shap:

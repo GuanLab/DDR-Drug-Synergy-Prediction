@@ -197,6 +197,100 @@ def evaluate_SHAP_analysis(data_path, subset_type, exclude_synergy_batch, exclud
             np.savetxt(subset_outpath+'/pred_'+target+'_'+str(idx)+'.txt', pred[:,1])
             pickle.dump(f_name,open(subset_outpath+'/feature_names_'+target+'.pkl','wb'))
 
+def evaluate_SHAP_analysis_on_holdout(data_path, subset_type, exclude_synergy_batch, exclude_cell_line, exclude_cancer_type, target, features, mol_type, surrogate_gene, surrogate_geneset, surrogate_synleth, surrogate_chem):
+    """ carry out subset-specific SHAP analysis
+    
+    Params
+    ------
+    data_path: str
+        'test_by_cell_line' or 'test_by_indication'
+    subset_type: str
+        the subset division used to carry out SHAP:
+        for example:
+            '.'
+            'moa': mode-of-action specific
+            'tissue': tissue specific
+            'cell_line': cell line specific
+    target: str
+        predicted score ('aoc' or 'bliss')
+
+    dep_gene: str
+        gene to make dependency plot
+    
+    Yields
+    ------
+    """
+    from glob import glob
+
+    path = data_path+'/hold_out_validation'
+    cv_split = 'experiment_'+data_path.split('/')[2]
+    
+    for idx in range(10):
+
+        # load trained model parameter
+        model_path = target+'_'+str(idx)+'.model'
+
+        # define path of subsets
+        if subset_type in ['Train', 'Test']:
+            all_subset_path = glob(path+'/'+subset_type+'.tsv')
+        else:
+            all_subset_path = glob(path+'/'+subset_type+'/*.tsv')
+        assert len(all_subset_path)>0, 'File path does not exist!'
+    
+        os.makedirs('./'+subset_type, exist_ok = True)
+
+        for sub_path in all_subset_path:
+            
+            subset_name = sub_path.split('/')[-1].split('.')[0]
+
+            if subset_type in ["Train", "Test"]:  
+                subset_outpath = './hold_out_validation/'+subset_type
+
+            else:
+                # all_moa           
+                if subset_type == "all_moa":
+                    subset_name = sub_path.split('/')[-1].split('.')[0]
+                    if subset_name not in ['ATMi_ATRi', 'ATRi_PARPi', 'ATRi_TOP1i', 'ATRi_Cytostatic_Antimetabolite', 'DNAPKi_IR']:
+                        continue
+                    
+                subset_outpath = './'+subset_type+'/'+subset_name
+                os.makedirs(subset_outpath, exist_ok = True)
+                
+            print("Loading sub dataset for SHAP analysis: ",subset_name)
+            Test = pd.read_csv(sub_path, sep = '\t')
+            #print(Test.shape)
+            #Test = Test[Test['.response_'+target].notna()]
+            #print(Test.shape)
+            if Test.shape[0] == 0:
+                continue
+
+            results = open(subset_outpath+'/cor_'+target+'.txt', 'a')
+            # prediction on test set
+            cor, pred = predict(sub_path, exclude_synergy_batch, exclude_cell_line, exclude_cancer_type, target, features, mol_type, model_path, surrogate_gene, surrogate_geneset, surrogate_synleth, surrogate_chem)
+            results.write('%.4f\n'%(cor))
+            results.close()
+            print("base value:", np.mean(pred[:,1]))
+
+            # SHAP analysis on the test set
+            shap_val, _, f_name = SHAP_analysis(sub_path, exclude_synergy_batch, exclude_cell_line, exclude_cancer_type, target, cv_split, features, mol_type, model_path, surrogate_gene, surrogate_geneset, surrogate_synleth, surrogate_chem)
+
+            # save original Test_X without target gene and network alterations:
+            if ('network' in features) or ('target_gene' in features):
+                new_features = [i for i in features if (i not in ['network', 'target_gene'])]
+            else:
+                new_features = features
+            print(new_features)
+            f_name, Test_X, Test_Y = build_feature_dataset(Test, exclude_synergy_batch, exclude_cell_line, exclude_cancer_type, target, cv_split, new_features, mol_type, surrogate_gene, surrogate_geneset, surrogate_synleth, surrogate_chem, if_train = False)
+
+            # Save SHAP values and feature values to np arrays
+            shap_val = sparse.csr_matrix(shap_val)
+            Test_X = sparse.csr_matrix(Test_X)
+            sparse.save_npz(subset_outpath+'/SHAP_'+target+'_'+str(idx)+'.npz', shap_val)
+            sparse.save_npz(subset_outpath+'/features_'+target+'_'+str(idx)+'.npz', Test_X)
+            np.savetxt(subset_outpath+'/gs_'+target+'_'+str(idx)+'.txt', Test_Y)
+            np.savetxt(subset_outpath+'/pred_'+target+'_'+str(idx)+'.txt', pred[:,1])
+            pickle.dump(f_name,open(subset_outpath+'/feature_names_'+target+'.pkl','wb'))
+
 def k_fold_cross_validation(data_path, exclude_synergy_batch, exclude_cell_line, exclude_cancer_type, target, features, mol_type, surrogate_gene, surrogate_geneset, surrogate_synleth, surrogate_chem):
     """ Five fold cross validation of synergy prediction model
 
