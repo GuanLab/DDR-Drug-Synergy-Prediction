@@ -1,4 +1,4 @@
-# Merck DDR Drug Synergy Prediction
+# **SynDDR: A Systematic Platform for Benchmarking DNA Damage Response Combination Therapy Predictions**
 
 This repository contains the code for DDR drug Synergy Prediction.
 
