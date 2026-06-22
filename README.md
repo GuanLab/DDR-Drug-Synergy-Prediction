@@ -63,15 +63,31 @@ The model uses the following feature groups:
 
 ## Dependencies
 
-| Purpose | Package | Version / Link |
-|---|---|---|
-| Model training | Python | [3.0+](https://www.python.org/download/releases/3.0/) |
-| Model training | LightGBM | [2.3.2](https://lightgbm.readthedocs.io/en/latest/index.html) |
-| Chemical features | RDKit | [Install guide](https://www.rdkit.org/docs/Install.html) |
-| Chemical features | PubChemPy | [1.0.4](https://pubchempy.readthedocs.io/en/latest/guide/install.html) |
-| Chemical features | Open Babel | [Install guide](https://open-babel.readthedocs.io/en/latest/UseTheLibrary/PythonInstall.html) |
-| Chemical features | pybel | [0.14.10](https://pypi.org/project/pybel/) |
-| Target retrieval | chembl_webresource_client | [GitHub](https://github.com/chembl/chembl_webresource_client) |
+Install dependencies with:
+
+```bash
+pip install -r requirements.txt
+```
+
+Pinned dependencies in [requirements.txt](requirements.txt):
+
+| Package | Version |
+|---|---|
+| chembl_webresource_client | 0.10.4 |
+| lightgbm | 3.1.1 |
+| matplotlib | 3.3.4 |
+| networkx | 2.5.1 |
+| numpy | 1.19.5 |
+| openbabel | 3.2.0 |
+| pandas | 1.1.5 |
+| PubChemPy | 1.0.4 |
+| pybel | 0.15.5 |
+| rdkit | 2026.3.3 |
+| scikit_learn | 1.9.0 |
+| scipy | 1.5.4 |
+| seaborn | 0.11.2 |
+| shap | 0.35.0 |
+| tqdm | 4.31.1 |
 
 ## Data Sources
 
